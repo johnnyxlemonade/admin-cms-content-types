@@ -138,9 +138,20 @@ final class RecordLifecycleTest extends TestCase
         $id = $lifecycle->createDraft(7, 'cs');
         $values = new RecordValues($module, $definitions, new RecordModel($database, $types), $types, $validation);
         // Nevyplneny koncept lze ulozit, primy pokus o publikaci ale nic nezapise.
-        $draft = ['locale' => 'cs', 'title' => 'Incomplete draft', 'publication_state' => '1'];
+        $draft = ['locale' => 'cs', 'title' => '', 'publication_state' => '1'];
         $lifecycle->save(7, $id, CmsContentInput::fromEditor($draft), RecordData::fromEditor($draft));
         $beforePublication = $this->snapshot($database);
+        self::assertNull($database->table('cms_route')->where('entity_id', $id)->first());
+        $lifecycle->save(7, $id, CmsContentInput::fromEditor($draft), RecordData::fromEditor($draft));
+        self::assertSame($beforePublication, $this->snapshot($database));
+        try {
+            $publish = ['publication_state' => '2'] + $draft;
+            $lifecycle->save(7, $id, CmsContentInput::fromEditor($publish), RecordData::fromEditor($publish));
+            self::fail('Untitled record published');
+        } catch (\Lemonade\Cms\Content\CmsContentValidationException $exception) {
+            self::assertArrayHasKey('title', $exception->errors());
+        }
+        self::assertSame($beforePublication, $this->snapshot($database));
         try {
             $publish = ['title' => 'Must not persist', 'publication_state' => '2', 'author_name' => 'Must not persist'] + $draft;
             $lifecycle->save(7, $id, CmsContentInput::fromEditor($publish), RecordData::fromEditor($publish));

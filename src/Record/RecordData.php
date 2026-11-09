@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Lemonade\Cms\ContentTypes\Record;
 
-use DomainException;
+use Lemonade\Cms\Content\CmsContentValidation;
+use Lemonade\Cms\Content\CmsContentValidationException;
 use Lemonade\Cms\Content\CmsRoot;
 
 /**
@@ -26,9 +27,9 @@ final readonly class RecordData
      */
     public static function fromEditor(array $data): self
     {
-        $author = trim((string) ($data['author_name'] ?? ''));
+        $author = CmsContentValidation::texts($data, ['author_name'])['author_name'] ?? '';
         if (mb_strlen($author) > 255) {
-            throw new DomainException('records.validation.author_max_length');
+            throw new CmsContentValidationException(['author_name' => 'records.validation.author_max_length']);
         }
         return new self($author === '' ? null : $author, $data);
     }

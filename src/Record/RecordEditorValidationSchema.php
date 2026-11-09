@@ -36,7 +36,6 @@ final readonly class RecordEditorValidationSchema
             ->field('locale', $this->translator->get('records.editor.content'))
                 ->required($this->translator->get('records.validation.locale_required'))
             ->field('title', $this->translator->get('records.fields.title'))
-                ->required($this->translator->get('records.validation.title_required'))
                 ->maxLength(180, $this->translator->get('records.validation.title_max_length'))
             ->field('author_name', $this->translator->get('records.fields.author_name'))
                 ->maxLength(255, $this->translator->get('records.validation.author_max_length'))

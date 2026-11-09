@@ -22,7 +22,6 @@ use Lemonade\Admin\Editor\AdminEditor\Layout\SectionBlock;
 use Lemonade\Admin\Editor\AdminEditor\Layout\SeoSection;
 use Lemonade\Admin\Module\AdminModuleRouteResolver;
 use Lemonade\Admin\Presentation\AdminFileUploadCollection;
-use Lemonade\Cms\CmsPublicationState;
 use Lemonade\Cms\ContentTypes\Field\FieldTypeRegistry;
 use Lemonade\Framework\Routing\UrlGenerator;
 
@@ -80,7 +79,7 @@ final readonly class RecordEditorDefinition
         $blocks = [
             Field::hidden('locale')->defaultValue($contentLocale),
             new FieldGroupBlock([
-                new FieldColumn(Field::text('title', labelKey: 'records.fields.title')->required()->attributes(['maxlength' => '180']), md: 12),
+                new FieldColumn(Field::text('title', labelKey: 'records.fields.title')->required()->help('', 'admin.cms_validation.required_help')->placeholder('', 'admin.datagrid.untitled')->attributes(['maxlength' => '180'] + CmsPublicationSection::requiredAttributes((int) ($article['translations'][0]['publication_state'] ?? 0), $canPublish)), md: 12),
                 new FieldColumn(Field::text('author_name', labelKey: 'records.fields.author_name')->attributes(['maxlength' => '255']), md: 12),
             ]),
         ];
@@ -89,15 +88,12 @@ final readonly class RecordEditorDefinition
             $field = $this->types->contentField($definition);
             if ($field->isRequired()) {
                 $globalRequired = (int) $definition['localized'] !== 1 && $otherPublishedLocale;
-                $published = (int) ($article['translations'][0]['publication_state'] ?? 0) === CmsPublicationState::Published->value;
-                $attributes = [
-                    'data-lemonade-required-message' => 'content-types.validation.required',
-                    'data-lemonade-required-active' => $globalRequired || $published ? '1' : '0',
-                ];
-                if ($canPublish && !$globalRequired) {
-                    $attributes['data-lemonade-required-when'] = 'publication_state';
-                    $attributes['data-lemonade-required-value'] = (string) CmsPublicationState::Published->value;
-                }
+                $attributes = CmsPublicationSection::requiredAttributes(
+                    (int) ($article['translations'][0]['publication_state'] ?? 0),
+                    $canPublish,
+                    $globalRequired,
+                    'content-types.validation.required',
+                );
                 $field = $field->attributes($attributes + $field->inputAttributes());
             }
             $rows[(int) $definition['row_id']][] = new FieldColumn($field, md: (int) $definition['span']);

@@ -22,7 +22,9 @@ use Lemonade\Admin\Module\AdminModuleRouteResolver;
 use Lemonade\Cms\Content\CmsContentInput;
 use Lemonade\Cms\Content\CmsContentLifecycle;
 use Lemonade\Cms\Content\CmsContentReadModel;
+use Lemonade\Cms\Content\CmsContentValidationException;
 use Lemonade\Cms\ContentTypes\Exception\DefinitionValidationException;
+use Lemonade\Framework\Localization\TranslatorInterface;
 use Lemonade\Framework\Routing\UrlGenerator;
 use Lemonade\Framework\Validation\ValidationSchema;
 
@@ -50,6 +52,7 @@ final readonly class RecordEditor implements
         private AdminModuleRouteResolver $routes,
         private UrlGenerator $urls,
         private AuthorizationService $authorization,
+        private TranslatorInterface $translator,
     ) {}
 
     /**
@@ -186,12 +189,15 @@ final readonly class RecordEditor implements
     {
         try {
             $actorId = $this->actors->requireLocalUser()->id();
-            if (($data['publication_state'] ?? null) === null) {
-                unset($data['publication_state'], $data['published_at']);
-            }
             $this->service->save($actorId, $id, CmsContentInput::fromEditor($data), RecordData::fromEditor($data));
         } catch (DefinitionValidationException $exception) {
             throw new EditorValidationException(implode(' ', $exception->errors()), previous: $exception, errors: $exception->errors());
+        } catch (CmsContentValidationException $exception) {
+            throw new EditorValidationException(
+                $exception->getMessage(),
+                previous: $exception,
+                errors: array_map($this->translator->get(...), $exception->errors()),
+            );
         } catch (DomainException $exception) {
             throw new EditorValidationException($exception->getMessage(), previous: $exception);
         }
@@ -219,6 +225,12 @@ final readonly class RecordEditor implements
             $articleId = $this->service->createDraft($actorId, $locale);
         } catch (DefinitionValidationException $exception) {
             throw new EditorValidationException(implode(' ', $exception->errors()), previous: $exception, errors: $exception->errors());
+        } catch (CmsContentValidationException $exception) {
+            throw new EditorValidationException(
+                $exception->getMessage(),
+                previous: $exception,
+                errors: array_map($this->translator->get(...), $exception->errors()),
+            );
         } catch (DomainException $exception) {
             throw new EditorValidationException($exception->getMessage(), previous: $exception);
         }

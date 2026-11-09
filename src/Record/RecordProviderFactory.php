@@ -104,6 +104,7 @@ final readonly class RecordProviderFactory implements ModuleProviderFactoryInter
                 $container->get(AdminModuleRouteResolver::class),
                 $container->get(UrlGenerator::class),
                 $container->get(AuthorizationService::class),
+                $container->get(TranslatorInterface::class),
             );
         }
         $grid = new RecordDataGrid(
