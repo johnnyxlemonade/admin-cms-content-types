@@ -14,9 +14,6 @@ use Lemonade\Cms\ContentTypes\Field\FieldValidation;
 use Lemonade\Cms\ContentTypes\Models\DefinitionModel;
 use Lemonade\Cms\ContentTypes\Models\RecordModel;
 
-/**
- * Validuje definovana pole a zapisuje je uvnitr existujici CMS transakce
- */
 final class RecordValues implements CmsContentValueWriter
 {
     /** @var array<int,int|string|null> */
@@ -26,9 +23,6 @@ final class RecordValues implements CmsContentValueWriter
     /** @var list<array<string,mixed>>|null */
     private ?array $loadedFields = null;
 
-    /**
-     * Nastavuje uloziste a sdilene validatory typu poli
-     */
     public function __construct(
         private readonly RecordModule $module,
         private readonly DefinitionModel $definitions,
@@ -56,10 +50,10 @@ final class RecordValues implements CmsContentValueWriter
         if (!$domain instanceof RecordData) {
             throw new InvalidArgumentException('Unexpected content record data.');
         }
-        // Zamek definice serializuje zmenu pravidel s ulozenim obsahu.
+        // Serialize definition changes with content saves.
         $this->definitions->type($this->module->id(), lock: true, includeDeleted: true);
         $this->loadedFields = null;
-        $this->fields = $this->activeFields(lock: true);
+        $this->fields = $this->scalarFields(lock: true);
         $stored = $this->model->values($this->module->id(), $id, $locale, $this->fields);
         $input = $domain->fields();
         $globalRequired = $state === CmsPublicationState::Published || $this->model->hasOtherPublishedLocale($id, $locale);
@@ -70,23 +64,26 @@ final class RecordValues implements CmsContentValueWriter
             $key = 'field_' . $fieldId;
             $type = $this->types->get((string) $field['kind']);
             $projection = $this->types->editorField($field);
-            $value = array_key_exists($key, $input) ? $input[$key] : (array_key_exists($fieldId, $stored) ? $this->displayValue($field, $stored[$fieldId]) : $projection['default_value']);
+            if (array_key_exists($key, $input)) {
+                $value = $input[$key];
+            } elseif (array_key_exists($fieldId, $stored)) {
+                $value = $this->displayValue($field, $stored[$fieldId]);
+            } else {
+                $value = $projection['default_value'];
+            }
             try {
                 $result = $type->validate(['default_value' => $value] + $projection, $this->validation);
                 $normalized = $result['values']['default_' . $type->storage()];
                 $required = (int) $field['localized'] === 1 ? $state === CmsPublicationState::Published : $globalRequired;
-                if ($required && (int) $field['required'] === 1 && ($normalized === null || preg_match('/^\s*$/u', html_entity_decode(strip_tags((string) $normalized), ENT_QUOTES | ENT_HTML5, 'UTF-8')) === 1)) {
+                if ($required && (int) $field['required'] === 1 && $this->isEmptyValue($normalized)) {
                     $this->validation->fail($key, 'required');
                 }
             } catch (DefinitionValidationException $exception) {
                 $errors[$key] = implode(' ', $exception->errors());
                 continue;
             }
-            $old = $stored[$fieldId] ?? null;
-            $equal = $type->storage() === 'decimal' && $old !== null && $normalized !== null
-                ? FieldValidation::compareNumbers((string) $old, (string) $normalized) === 0
-                : ($old === null ? $normalized === null : (string) $old === (string) $normalized);
-            if (!$equal || !array_key_exists($fieldId, $stored)) {
+            $storedValue = $stored[$fieldId] ?? null;
+            if (!$this->valuesEqual($type->storage(), $storedValue, $normalized) || !array_key_exists($fieldId, $stored)) {
                 $this->prepared[$fieldId] = $normalized;
             }
         }
@@ -98,29 +95,61 @@ final class RecordValues implements CmsContentValueWriter
         return $this->prepared !== [];
     }
 
+    private function isEmptyValue(int|string|null $value): bool
+    {
+        if ($value === null) {
+            return true;
+        }
+
+        $text = html_entity_decode(strip_tags((string) $value), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        return preg_match('/^\s*$/u', $text) === 1;
+    }
+
+    private function valuesEqual(?string $storage, int|string|null $stored, int|string|null $value): bool
+    {
+        if ($storage === 'decimal' && $stored !== null && $value !== null) {
+            return FieldValidation::compareNumbers((string) $stored, (string) $value) === 0;
+        }
+        if ($stored === null) {
+            return $value === null;
+        }
+
+        return (string) $stored === (string) $value;
+    }
+
     public function save(int $id, string $locale): void
     {
         $this->model->save($this->module->id(), $id, $locale, $this->fields, $this->prepared);
     }
 
     /**
-     * Nacte pouze nearchivovane definice v poradi Builderu
-     *
      * @return list<array<string,mixed>>
      */
     public function activeFields(bool $lock = false): array
     {
-        return $this->loadedFields ??= array_values(array_filter($this->definitions->fields($this->module->id(), $lock), static fn(array $field): bool => $field['archived_at'] === null));
+        return $this->loadedFields ??= array_values(array_filter(
+            $this->definitions->fields($this->module->id(), $lock),
+            static fn(array $field): bool => $field['archived_at'] === null,
+        ));
     }
 
     /**
-     * Vrati editorove hodnoty, vcetne defaultu nove pridanych poli
-     *
+     * @return list<array<string,mixed>>
+     */
+    public function scalarFields(bool $lock = false): array
+    {
+        return array_values(array_filter(
+            $this->activeFields($lock),
+            fn(array $field): bool => $this->types->get((string) $field['kind'])->storage() !== null,
+        ));
+    }
+
+    /**
      * @return array<string,int|string|null>
      */
     public function editorValues(int $id, string $locale): array
     {
-        $fields = $this->activeFields();
+        $fields = $this->scalarFields();
         $stored = $this->model->values($this->module->id(), $id, $locale, $fields);
         $values = [];
         foreach ($fields as $field) {
@@ -133,8 +162,6 @@ final class RecordValues implements CmsContentValueWriter
     }
 
     /**
-     * Pouzije existujici normalizaci databazovych hodnot pro HTML controls
-     *
      * @param array<string,mixed> $field
      */
     private function displayValue(array $field, int|string|null $value): int|string|null

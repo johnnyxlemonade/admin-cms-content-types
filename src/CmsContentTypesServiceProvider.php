@@ -22,12 +22,18 @@ use Lemonade\Cms\ContentTypes\Field\Types\BooleanFieldType;
 use Lemonade\Cms\ContentTypes\Field\Types\DateFieldType;
 use Lemonade\Cms\ContentTypes\Field\Types\DateTimeFieldType;
 use Lemonade\Cms\ContentTypes\Field\Types\DecimalFieldType;
+use Lemonade\Cms\ContentTypes\Field\Types\FileFieldType;
+use Lemonade\Cms\ContentTypes\Field\Types\FilesFieldType;
+use Lemonade\Cms\ContentTypes\Field\Types\GalleryFieldType;
+use Lemonade\Cms\ContentTypes\Field\Types\ImageFieldType;
 use Lemonade\Cms\ContentTypes\Field\Types\IntegerFieldType;
 use Lemonade\Cms\ContentTypes\Field\Types\RichTextFieldType;
 use Lemonade\Cms\ContentTypes\Field\Types\SelectFieldType;
 use Lemonade\Cms\ContentTypes\Field\Types\TextareaFieldType;
 use Lemonade\Cms\ContentTypes\Field\Types\TextFieldType;
 use Lemonade\Cms\ContentTypes\Models\ContentTypeModel;
+use Lemonade\Cms\ContentTypes\Record\RecordProviderFactory;
+use Lemonade\Cms\ContentTypes\Record\RecordRegistration;
 use Lemonade\Framework\Container\ContainerBuilderInterface;
 use Lemonade\Framework\Container\ContainerInterface;
 use Lemonade\Framework\Core\BootableServiceProviderInterface;
@@ -35,14 +41,11 @@ use Lemonade\Framework\Core\ServiceProviderInterface;
 use Lemonade\Framework\Localization\TranslationResourceRegistry;
 use Lemonade\Framework\View\ViewResourceRegistry;
 
-/**
- * Pripojuje prehled obsahovych typu ke sdilenemu Admin transportu
- */
 final readonly class CmsContentTypesServiceProvider implements ServiceProviderInterface, BootableServiceProviderInterface
 {
     public function register(ContainerBuilderInterface $container): void
     {
-        $container->scoped(Record\RecordProviderFactory::class, static fn(ContainerInterface $scope): Record\RecordProviderFactory => new Record\RecordProviderFactory($scope));
+        $container->scoped(RecordProviderFactory::class, static fn(ContainerInterface $scope): RecordProviderFactory => new RecordProviderFactory($scope));
         $container->singleton(FieldTypeRegistry::class, static fn(): FieldTypeRegistry => new FieldTypeRegistry([
             new TextFieldType(),
             new TextareaFieldType(),
@@ -53,6 +56,11 @@ final readonly class CmsContentTypesServiceProvider implements ServiceProviderIn
             new DateFieldType(),
             new DateTimeFieldType(),
             new SelectFieldType(),
+            new ImageFieldType(),
+            new GalleryFieldType(),
+            new FileFieldType(),
+            new FilesFieldType(),
+
         ]));
         $container->scoped('content-types.create', static fn(ContainerInterface $container): StandardEditorAction => StandardEditorAction::create($container->get(EditorDispatcher::class), ModuleManifest::CODE));
         $container->scoped('content-types.save', static fn(ContainerInterface $container): StandardEditorAction => StandardEditorAction::save($container->get(EditorDispatcher::class), ModuleManifest::CODE));
@@ -89,7 +97,7 @@ final readonly class CmsContentTypesServiceProvider implements ServiceProviderIn
         }
         $container->get(ClientTranslationGroupRegistry::class)->register('content-types');
         $container->get(ClientTranslationGroupRegistry::class)->register('records');
-        Record\RecordRegistration::boot($container);
+        RecordRegistration::boot($container);
         $container->get(DataGridRegistry::class)->register(ModuleManifest::CODE, ContentTypesDataGrid::class);
         $container->get(ModulePageRegistry::class)->registerIndex(ModuleManifest::CODE, ContentTypesModulePageProvider::class);
     }

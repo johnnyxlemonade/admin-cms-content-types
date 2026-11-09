@@ -8,9 +8,6 @@ use Lemonade\Framework\Database\Migration\MigrationInterface;
 use Lemonade\Framework\Database\Schema\Blueprint\TableBlueprint;
 use Lemonade\Framework\Database\Schema\Schema;
 
-/**
- * Rozsiruje katalog typu o relacni definice poli a jejich pravidla
- */
 final readonly class CreateContentFieldDefinitions implements MigrationInterface
 {
     public static function identifier(): string
@@ -20,14 +17,12 @@ final readonly class CreateContentFieldDefinitions implements MigrationInterface
 
     public function up(Schema $schema): void
     {
-        // Doplnuje popis, dostupnost a revizi cele definice typu.
         $schema->table('cms_content_type', static function (TableBlueprint $table): void {
             $table->text('description')->nullable();
             $table->boolean('enabled')->default(1);
             $table->unsignedInteger('revision')->default(1);
         });
 
-        // Uchovava poradi radku vizualniho editoru v ramci jednoho typu.
         $schema->create('cms_content_layout_row', static function (TableBlueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('type_id');
@@ -39,7 +34,6 @@ final readonly class CreateContentFieldDefinitions implements MigrationInterface
             $table->charset('utf8mb4');
         });
 
-        // Definuje stabilni pole, jeho layout, pravidla a typovanou vychozi hodnotu.
         $schema->create('cms_content_field', static function (TableBlueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('type_id');
@@ -53,7 +47,7 @@ final readonly class CreateContentFieldDefinitions implements MigrationInterface
             $table->boolean('localized')->default(1);
             $table->unsignedInteger('sort_order')->default(0);
             $table->text('help')->nullable();
-            // Pouze vlastni prezentacni atributy; prazdne HTML ID se odvozuje z code.
+            // An unset HTML ID is derived from the field code.
             $table->string('css_class', 255)->nullable();
             $table->string('html_id', 128)->nullable();
             $table->unsignedInteger('min_length')->nullable();
@@ -79,7 +73,6 @@ final readonly class CreateContentFieldDefinitions implements MigrationInterface
             $table->charset('utf8mb4');
         });
 
-        // Uchovava sdilene kody, poradi a archivaci moznosti Selectu.
         $schema->create('cms_content_field_option', static function (TableBlueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('field_id');

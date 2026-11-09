@@ -24,6 +24,7 @@ use Lemonade\Cms\ContentTypes\DataGrid\ContentTypesDataGrid;
 use Lemonade\Cms\ContentTypes\Migrations\AddContentTypeSystemMedia;
 use Lemonade\Cms\ContentTypes\Migrations\AddContentTypeThumbnail;
 use Lemonade\Cms\ContentTypes\Migrations\CreateContentFieldDefinitions;
+use Lemonade\Cms\ContentTypes\Migrations\CreateContentRecords;
 use Lemonade\Cms\ContentTypes\Migrations\CreateContentTypes;
 use Lemonade\Cms\ContentTypes\ModuleManifest;
 use Lemonade\Framework\Container\Container;
@@ -33,14 +34,8 @@ use Lemonade\Framework\Localization\TranslationResourceRegistry;
 use Lemonade\Framework\View\ViewResourceRegistry;
 use PHPUnit\Framework\TestCase;
 
-/**
- * Overuje Composer discovery a read-only Admin contributions bez databaze
- */
 final class ModuleRegistrationTest extends TestCase
 {
-    /**
-     * Bootuje skutecny manifest z Composer metadat bez cteni modulove tabulky
-     */
     public function testComposerDiscoveryRegistersNavigationGridPermissionAndMigration(): void
     {
         $temporary = sys_get_temp_dir() . '/content-types-' . bin2hex(random_bytes(8));
@@ -101,7 +96,7 @@ final class ModuleRegistrationTest extends TestCase
             self::assertSame(ContentTypesDataGrid::class, $grids->providerServiceId(ModuleManifest::CODE));
             self::assertSame(ContentTypesModulePageProvider::class, $pages->indexProviderServiceId(ModuleManifest::CODE));
             self::assertTrue($editors->has(ModuleManifest::CODE));
-            self::assertSame([CreateContentTypes::identifier(), CreateContentFieldDefinitions::identifier(), \Lemonade\Cms\ContentTypes\Migrations\CreateContentRecords::identifier(), AddContentTypeSystemMedia::identifier(), AddContentTypeThumbnail::identifier()], $migrations->identifiers());
+            self::assertSame([CreateContentTypes::identifier(), CreateContentFieldDefinitions::identifier(), CreateContentRecords::identifier(), AddContentTypeSystemMedia::identifier(), AddContentTypeThumbnail::identifier()], $migrations->identifiers());
             self::assertTrue($container->get(ClientTranslationGroupRegistry::class)->has('content-types'));
             $audit = $container->get(AuditEventPresentationRegistry::class);
             self::assertSame('content-types.module.name', $audit->modulePresentation(ModuleManifest::CODE)?->nameKey());

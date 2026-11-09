@@ -18,14 +18,8 @@ use Lemonade\Framework\Localization\TranslatorInterface;
 use Lemonade\Framework\Routing\Router;
 use PHPUnit\Framework\TestCase;
 
-/**
- * Oddeluje navigacni viditelnost od stabilnich prav a uzivatelskych popisku
- */
 final class RecordPresentationTest extends TestCase
 {
-    /**
-     * Neaktivni a prejmenovany typ zachovava prava i samostatnou sekci
-     */
     public function testTypeChangesPreservePermissionsAndSeparateDefinitionManagement(): void
     {
         $originalCodes = null;

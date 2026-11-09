@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Lemonade\Cms\ContentTypes\Tests\Integration;
 
+use DomainException;
 use Lemonade\Admin\Audit\AuditActor;
 use Lemonade\Admin\Audit\AuditLogService;
 use Lemonade\Admin\Audit\AuditLogWriterInterface;
@@ -22,12 +23,15 @@ use Lemonade\Admin\Presentation\Models\AdminFileModel;
 use Lemonade\Cms\Content\CmsContentInput;
 use Lemonade\Cms\Content\CmsContentLifecycle;
 use Lemonade\Cms\Content\CmsContentReadModel;
+use Lemonade\Cms\Content\CmsContentValidationException;
 use Lemonade\Cms\Content\CmsDomainMapping;
 use Lemonade\Cms\Content\Models\CmsContentModel;
 use Lemonade\Cms\ContentTypes\CmsContentTypesServiceProvider;
 use Lemonade\Cms\ContentTypes\Exception\DefinitionValidationException;
 use Lemonade\Cms\ContentTypes\Field\FieldTypeRegistry;
 use Lemonade\Cms\ContentTypes\Field\FieldValidation;
+use Lemonade\Cms\ContentTypes\Migrations\AddContentTypeSystemMedia;
+use Lemonade\Cms\ContentTypes\Migrations\AddContentTypeThumbnail;
 use Lemonade\Cms\ContentTypes\Migrations\CreateContentFieldDefinitions;
 use Lemonade\Cms\ContentTypes\Migrations\CreateContentRecords;
 use Lemonade\Cms\ContentTypes\Migrations\CreateContentTypes;
@@ -45,7 +49,6 @@ use Lemonade\Cms\Routing\Locale\PublicLocaleRegistryInterface;
 use Lemonade\Cms\Routing\Locale\PublicLocaleSnapshot;
 use Lemonade\Framework\Cache\CacheManager;
 use Lemonade\Framework\Cache\Store\ArrayCacheItemPool;
-
 use Lemonade\Framework\Container\Container;
 use Lemonade\Framework\Database\Connection\DatabaseConfig;
 use Lemonade\Framework\Database\Database;
@@ -54,6 +57,7 @@ use Lemonade\Framework\Database\Driver\Mysql\MysqlDatabaseDriver;
 use Lemonade\Framework\Database\Driver\Mysql\MysqlIdentifierEscaper;
 use Lemonade\Framework\Database\Driver\Mysql\MysqlSchemaGrammar;
 use Lemonade\Framework\Database\Driver\Mysql\MysqlSqlEscaper;
+use Lemonade\Framework\Database\Exception\DatabaseException;
 use Lemonade\Framework\Database\Instrumentation\Internal\DatabaseInstrumentation;
 use Lemonade\Framework\Database\Schema\Schema;
 use Lemonade\Framework\Database\Schema\SchemaCompiler;
@@ -67,18 +71,14 @@ use Lemonade\Framework\Validation\Rule\RuleRegistry;
 use Lemonade\Framework\Validation\ValidationRuleResolver;
 use Lemonade\Image\ImageOriginalMetadata;
 use Nyholm\Psr7\ServerRequest;
+use OutOfBoundsException;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use RuntimeException;
 
-/**
- * Overuje realne migrace, typovane hodnoty a atomicitu CMS auditu v izolovane DB
- */
 final class RecordLifecycleTest extends TestCase
 {
     /**
-     * Sestavi produkcni registry a validator pro nezavisle instance lifecycle
-     *
      * @return array{FieldTypeRegistry,FieldValidation}
      */
     private function fieldServices(): array
@@ -101,7 +101,7 @@ final class RecordLifecycleTest extends TestCase
             self::fail('Set CONTENT_TYPES_INTEGRATION_DATABASE to a dedicated content_types_test_ database.');
         }
         $config = DatabaseConfig::fromArray([
-            'driver' => 'mysql', 'host' => 'db', 'database' => $databaseName,
+            'driver' => 'mysql', 'host' => getenv('CONTENT_TYPES_INTEGRATION_HOST') !== false ? getenv('CONTENT_TYPES_INTEGRATION_HOST') : 'db', 'database' => $databaseName,
             'username' => 'db', 'password' => 'db',
         ]);
         $connection = new MysqlConnection($config, new DatabaseInstrumentation());
@@ -116,7 +116,7 @@ final class RecordLifecycleTest extends TestCase
         $database->statement("INSERT IGNORE INTO system_language (code,name,enabled,is_default,sort_order) VALUES ('cs','Czech',1,1,1), ('en','English',1,0,2), ('de','German',1,0,3)");
 
         $schema = new Schema(new SchemaCompiler(new MysqlSchemaGrammar(new MysqlSqlEscaper($escaper), $config)), $driver);
-        foreach ([new CreateCoreFiles(), new CreateContentTypes(), new CreateContentFieldDefinitions(), new CreateContentRecords(), new \Lemonade\Cms\ContentTypes\Migrations\AddContentTypeSystemMedia(), new \Lemonade\Cms\ContentTypes\Migrations\AddContentTypeThumbnail()] as $migration) {
+        foreach ([new CreateCoreFiles(), new CreateContentTypes(), new CreateContentFieldDefinitions(), new CreateContentRecords(), new AddContentTypeSystemMedia(), new AddContentTypeThumbnail()] as $migration) {
             $migration->up($schema);
         }
         $definitions = new DefinitionModel($database);
@@ -127,6 +127,9 @@ final class RecordLifecycleTest extends TestCase
         $ids = [];
         foreach ($types->codes() as $index => $kind) {
             $type = $types->get($kind);
+            if ($type->storage() === null) {
+                continue;
+            }
             $input = ['name' => $kind,'code' => $kind,'kind' => $kind,'decimal_places' => '8','default_value' => '','options' => [['code' => 'first','name' => 'First'], ['code' => 'second','name' => 'Second']]];
             $validated = $type->validate($input, $validation);
             $ids[$kind] = $definitions->saveField($typeId, null, ['name' => $kind,'code' => $kind,'kind' => $kind,'row_id' => $rowId,'span' => 12,'required' => 1,'localized' => $kind === 'integer' ? 0 : 1,'sort_order' => $index] + $validated['values']);
@@ -137,7 +140,6 @@ final class RecordLifecycleTest extends TestCase
         $lifecycle = $this->lifecycle($database, $module, new AuditLogService($database));
         $id = $lifecycle->createDraft(7, 'cs');
         $values = new RecordValues($module, $definitions, new RecordModel($database, $types), $types, $validation);
-        // Nevyplneny koncept lze ulozit, primy pokus o publikaci ale nic nezapise.
         $draft = ['locale' => 'cs', 'title' => '', 'publication_state' => '1'];
         $lifecycle->save(7, $id, CmsContentInput::fromEditor($draft), RecordData::fromEditor($draft));
         $beforePublication = $this->snapshot($database);
@@ -148,7 +150,7 @@ final class RecordLifecycleTest extends TestCase
             $publish = ['publication_state' => '2'] + $draft;
             $lifecycle->save(7, $id, CmsContentInput::fromEditor($publish), RecordData::fromEditor($publish));
             self::fail('Untitled record published');
-        } catch (\Lemonade\Cms\Content\CmsContentValidationException $exception) {
+        } catch (CmsContentValidationException $exception) {
             self::assertArrayHasKey('title', $exception->errors());
         }
         self::assertSame($beforePublication, $this->snapshot($database));
@@ -175,7 +177,7 @@ final class RecordLifecycleTest extends TestCase
         self::assertSame($auditCount, $database->table('system_audit_log')->countAllResults(), 'No-op must not audit');
         foreach (['text' => '', 'richtext' => '<p>&nbsp;</p>', 'integer' => '1.5', 'decimal' => '1.123456789', 'boolean' => 'yes','date' => '2027-02-29','datetime' => '2028-02-30T12:34','select' => 'foreign'] as $kind => $invalid) {
             $bad = $payload;
-            unset($bad['publication_state']); // Already published still enforces required values.
+            unset($bad['publication_state']);
             $bad['field_' . $ids[$kind]] = $invalid;
             $bad['title'] = 'Must not persist';
             $bad['author_name'] = 'Must not persist';
@@ -208,7 +210,7 @@ final class RecordLifecycleTest extends TestCase
         try {
             $this->lifecycle($database, $other, new AuditLogService($database))->delete(7, $id);
             self::fail('Foreign type deletion accepted');
-        } catch (\DomainException) {
+        } catch (DomainException) {
             self::assertNull($this->row($database->table('cms_content_record')->where('id', $id)->first())['deleted_at']);
         }
         $grid = new CmsContentDataGrid($database, $module->contentDefinition());
@@ -230,7 +232,7 @@ final class RecordLifecycleTest extends TestCase
             try {
                 $database->table('cms_content_record_translation_value')->insert($invalidRow);
                 self::fail('Invalid relational value accepted');
-            } catch (\Lemonade\Framework\Database\Exception\DatabaseException $exception) {
+            } catch (DatabaseException $exception) {
                 self::assertStringContainsString('Database query failed', $exception->getMessage());
             }
         }
@@ -260,6 +262,27 @@ final class RecordLifecycleTest extends TestCase
         self::assertSame('Integration record', $this->row($database->table('cms_content_record_translation')->where('record_id', $id)->where('locale', 'cs')->first())['title']);
         self::assertSame($auditCount, $database->table('system_audit_log')->countAllResults());
         $files = new AdminFileModel($driver, new FileReadModel($driver));
+        foreach (['image', 'gallery', 'file', 'files'] as $kind) {
+            $fieldId = $definitions->saveField($typeId, null, [
+                'name' => $kind, 'code' => 'media_' . $kind, 'kind' => $kind, 'row_id' => $rowId,
+                'span' => 6, 'required' => 0, 'localized' => 0, 'sort_order' => 100,
+            ]);
+            $field = array_column($definitions->fields($typeId), null, 'id')[$fieldId];
+            $usage = $types->mediaDefinition($module->code(), $field);
+            self::assertNotNull($usage);
+            $fileId = $files->createIdentity($module->code(), $id, $usage->usage(), $usage->kind());
+            $freshValues = new RecordValues($module, $definitions, new RecordModel($database, $types), $types, $validation);
+            self::assertArrayNotHasKey('field_' . $fieldId, $freshValues->editorValues($id, 'cs'));
+            self::assertNotContains($fieldId, array_column($freshValues->scalarFields(), 'id'));
+            foreach (['2026-11-09 00:00:00', null] as $archivedAt) {
+                $definitions->saveField($typeId, $fieldId, ['name' => 'Renamed', 'span' => 12, 'sort_order' => 101, 'archived_at' => $archivedAt]);
+                $reloaded = array_column($definitions->fields($typeId), null, 'id')[$fieldId];
+                self::assertSame($archivedAt === null, $types->mediaDefinition($module->code(), $reloaded) !== null);
+                self::assertSame([$fileId], array_column($files->listForEntity($module->code(), $id, $usage->usage()), 'id'));
+            }
+            self::assertSame(0, $database->table('cms_content_record_value')->where('field_id', $fieldId)->countAllResults());
+            self::assertSame(0, $database->table('cms_content_record_translation_value')->where('field_id', $fieldId)->countAllResults());
+        }
         $thumbnailId = $files->createIdentity($module->code(), $id, 'thumbnail', 'image');
         $files->updateImageSource($thumbnailId, 'first-asset', 'first-version', new ImageOriginalMetadata('first.png', ImageFormat::Png, 10, 1, 1));
         $files->updateImageSource($thumbnailId, 'second-asset', 'second-version', new ImageOriginalMetadata('second.png', ImageFormat::Png, 12, 2, 2));
@@ -288,7 +311,7 @@ final class RecordLifecycleTest extends TestCase
                 try {
                     $usages->require($currentModule->code(), $usage);
                     self::assertTrue($allowed);
-                } catch (\OutOfBoundsException) {
+                } catch (OutOfBoundsException) {
                     self::assertFalse($allowed);
                 }
             }
@@ -305,7 +328,7 @@ final class RecordLifecycleTest extends TestCase
         try {
             $lifecycle->createDraft(7, 'cs');
             self::fail('Disabled type allowed creation');
-        } catch (\DomainException $exception) {
+        } catch (DomainException $exception) {
             self::assertSame('records.validation.type_disabled', $exception->getMessage());
         }
         self::assertSame(1, $database->table('cms_content_record')->countAllResults());
@@ -320,8 +343,6 @@ final class RecordLifecycleTest extends TestCase
     }
 
     /**
-     * Zachyti systemova data, hodnoty, routy i audit pro overeni atomicity
-     *
      * @return array<string,list<array<string,mixed>>>
      */
     private function snapshot(Database $database): array
@@ -334,8 +355,6 @@ final class RecordLifecycleTest extends TestCase
     }
 
     /**
-     * Vrati existujici radek po explicitni testove kontrole
-     *
      * @param array<string,mixed>|null $row
      * @return array<string,mixed>
      */
@@ -346,8 +365,6 @@ final class RecordLifecycleTest extends TestCase
     }
 
     /**
-     * Pripojuje skutecne CMS sluzby ke spolecne databazi
-     *
      * @return CmsContentLifecycle<RecordData>
      */
     private function lifecycle(Database $database, RecordModule $module, AuditLogWriterInterface $writer): CmsContentLifecycle

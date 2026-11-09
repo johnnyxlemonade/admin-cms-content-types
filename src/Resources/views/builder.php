@@ -12,7 +12,6 @@ use Lemonade\Framework\View\ViewHelpers;
  * @var ViewHelpers $helpers
  * @var AdminEditorFieldRenderer $adminEditorFields
  * @var array<string,list<AdminEditorFieldDefinition>> $inspectors
- * @var array<string,AdminEditorFieldDefinition> $previews
  */
 $context = new AdminEditorRenderContext();
 $labels = [];
@@ -25,7 +24,7 @@ $kinds = [];
 foreach (array_keys($inspectors) as $kind) {
     $kinds[$kind] = $helpers->lang('content-types.kinds.' . $kind);
 }
-$icons = ['text' => 'type', 'textarea' => 'text-left', 'richtext' => 'paragraph', 'integer' => '123', 'decimal' => '123', 'boolean' => 'toggle-on', 'date' => 'calendar3', 'datetime' => 'calendar-week', 'select' => 'card-list'];
+$icons = ['image' => 'image', 'gallery' => 'images', 'file' => 'file-earmark', 'files' => 'files', 'text' => 'type', 'textarea' => 'text-left', 'richtext' => 'paragraph', 'integer' => '123', 'decimal' => '123', 'boolean' => 'toggle-on', 'date' => 'calendar3', 'datetime' => 'calendar-week', 'select' => 'card-list'];
 ?>
 <div class="lm-field-builder" data-lemonade-field-builder data-input="definition" data-name-input="name" data-code-input="code" data-translation-prefix="content-types" data-labels="<?= e(json_encode($labels, JSON_THROW_ON_ERROR)) ?>" data-kinds="<?= e(json_encode($kinds, JSON_THROW_ON_ERROR)) ?>" data-icons="<?= e(json_encode($icons, JSON_THROW_ON_ERROR)) ?>">
     <div class="lm-field-builder-columns">
@@ -72,48 +71,15 @@ $icons = ['text' => 'type', 'textarea' => 'text-left', 'richtext' => 'paragraph'
             <div data-builder-inspector></div>
         </aside>
     </div>
-    <details class="card lm-card lm-field-builder-preview" open>
-        <summary class="lm-field-builder-heading">
-            <h2 id="builder-preview-title" data-lemonade-i18n="content-types.builder.preview"><?= e($helpers->lang('content-types.builder.preview')) ?></h2>
-            <p data-lemonade-i18n="content-types.builder.preview_help"><?= e($helpers->lang('content-types.builder.preview_help')) ?></p>
-            <i class="bi bi-chevron-down" aria-hidden="true"></i>
-        </summary>
-        <div class="lm-field-builder-preview-scroll" tabindex="0" role="region" aria-labelledby="builder-preview-title">
-            <div class="lm-field-builder-preview-viewport" data-builder-preview-viewport="desktop">
-                <div class="lm-field-builder-browser-toolbar">
-                    <span class="lm-field-builder-browser-dots" aria-hidden="true">
-                        <span class="bg-danger"></span>
-                        <span class="bg-warning"></span>
-                        <span class="bg-success"></span>
-                    </span>
-                    <span class="lm-field-builder-browser-address" aria-hidden="true">
-                        <i class="bi bi-lock" aria-hidden="true"></i>
-                        <span>preview.local</span>
-                    </span>
-                    <span class="btn-group btn-group-sm lm-field-builder-preview-modes" role="group" aria-label="<?= e($helpers->lang('content-types.builder.preview_mode')) ?>" data-lemonade-i18n-aria-label="content-types.builder.preview_mode">
-                        <?php foreach (['mobile' => 'phone', 'laptop' => 'laptop', 'desktop' => 'display'] as $mode => $icon): ?>
-                            <button type="button" class="btn btn-outline-primary<?= $mode === 'desktop' ? ' active' : '' ?>" data-builder-preview-mode="<?= e($mode) ?>" title="<?= e($helpers->lang('content-types.builder.device_' . $mode)) ?>" data-lemonade-i18n-title="content-types.builder.device_<?= e($mode) ?>" aria-pressed="<?= $mode === 'desktop' ? 'true' : 'false' ?>">
-                                <i class="bi bi-<?= e($icon) ?>" aria-hidden="true"></i>
-                                <span class="visually-hidden" data-lemonade-i18n="content-types.builder.device_<?= e($mode) ?>"><?= e($helpers->lang('content-types.builder.device_' . $mode)) ?></span>
-                            </button>
-                        <?php endforeach ?>
-                    </span>
-                </div>
-                <div class="lm-field-builder-browser-body">
-                    <div data-builder-preview></div>
-                </div>
-            </div>
-        </div>
-    </details>
     <?php foreach ($inspectors as $kind => $fields): ?>
         <template data-builder-inspector-template="<?= e($kind) ?>">
             <?php
             $groups = ['properties' => [], 'validation' => [], 'display' => [], 'advanced' => []];
         foreach ($fields as $field) {
             $group = match ($field->name()) {
-                'name', 'code', 'required', 'localized', 'help' => 'properties',
+                'name', 'required', 'localized', 'help' => 'properties',
                 'default_value', 'span' => 'display',
-                'css_class', 'html_id' => 'advanced',
+                'code', 'css_class', 'html_id' => 'advanced',
                 default => 'validation',
             };
             $groups[$group][] = $field;
@@ -139,7 +105,7 @@ $icons = ['text' => 'type', 'textarea' => 'text-left', 'richtext' => 'paragraph'
                             <?php endforeach ?>
                         </div>
                         <?php if ($group === 'display'): ?>
-                            <details class="lm-field-builder-advanced" open>
+                            <details class="lm-field-builder-advanced">
                                 <summary data-lemonade-i18n="content-types.builder.advanced"><?= e($helpers->lang('content-types.builder.advanced')) ?></summary>
                                 <div class="lm-field-builder-controls">
                                     <?php foreach ($groups['advanced'] as $field): ?>
@@ -153,9 +119,6 @@ $icons = ['text' => 'type', 'textarea' => 'text-left', 'richtext' => 'paragraph'
             </div>
             <div data-builder-field-actions class="lm-field-builder-field-actions"></div>
         </template>
-    <?php endforeach ?>
-    <?php foreach ($previews as $kind => $field): ?>
-        <template data-builder-preview-template="<?= e($kind) ?>"><?= $adminEditorFields->render($field, $context, 'builder-preview-' . $kind) ?></template>
     <?php endforeach ?>
     <template data-builder-option-template>
         <div class="lm-form-editor-option-row lm-field-builder-option" data-lemonade-sortable-item>

@@ -19,14 +19,8 @@ use Lemonade\Admin\Icon\AdminIcon;
 use Lemonade\Cms\ContentTypes\Field\FieldTypeRegistry;
 use Lemonade\Framework\Routing\UrlGenerator;
 
-/**
- * Sklada AdminEditor a sablony inspectoru bez vlastniho formularoveho rendereru
- */
 final readonly class ContentTypesEditorDefinition
 {
-    /**
-     * Nastavuje named routy a lokalizovane moznosti controls
-     */
     public function __construct(
         private UrlGenerator $urls,
         private FieldTypeRegistry $types,
@@ -34,8 +28,6 @@ final readonly class ContentTypesEditorDefinition
     ) {}
 
     /**
-     * Sestavi editor typu se sdilenym vizualnim editorem definic
-     *
      * @param array<string,mixed> $type
      */
     public function create(array $type): AdminEditorDefinition
@@ -112,7 +104,6 @@ final readonly class ContentTypesEditorDefinition
             ->block(new CustomViewBlock('content-types::builder', [
                 'adminEditorFields' => $this->fields,
                 'inspectors' => $this->types->inspectors(),
-                'previews' => $this->types->previews(),
             ]))
             ->saveBar(CmsEditorSaveBar::create())
             ->build();

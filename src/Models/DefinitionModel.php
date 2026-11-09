@@ -6,19 +6,11 @@ namespace Lemonade\Cms\ContentTypes\Models;
 
 use Lemonade\Framework\Database\Database;
 
-/**
- * Nacita a uklada definice typu, poli, moznosti a rozvrzeni
- */
 final readonly class DefinitionModel
 {
-    /**
-     * Nastavuje databazi pro spolecnou transakci definice
-     */
     public function __construct(private Database $database) {}
 
     /**
-     * Nacte nesmazany typ; lifecycle muze pod zamkem zahrnout i smazane typy
-     *
      * @return array<string,mixed>|null
      */
     public function type(int $id, bool $lock = false, bool $includeDeleted = false): ?array
@@ -31,17 +23,12 @@ final readonly class DefinitionModel
         return ($lock ? $query->lockForUpdate() : $query)->first();
     }
 
-    /**
-     * Overi obsazenost stabilniho kodu typu
-     */
     public function codeExists(string $code): bool
     {
         return $this->database->table('cms_content_type')->where('code', $code)->exists();
     }
 
     /**
-     * Nacte vsechna pole vcetne archivovanych a jejich aktivni moznosti
-     *
      * @return list<array<string,mixed>>
      */
     public function fields(int $id, bool $lock = false): array
@@ -57,8 +44,6 @@ final readonly class DefinitionModel
     }
 
     /**
-     * Nacte moznosti vcetne archivovanych pro ochranu jejich identity
-     *
      * @return list<array<string,mixed>>
      */
     public function options(int $fieldId, bool $lock = false): array
@@ -68,8 +53,6 @@ final readonly class DefinitionModel
     }
 
     /**
-     * Nacte radky layoutu konkretniho typu
-     *
      * @return list<array<string,mixed>>
      */
     public function rows(int $typeId): array
@@ -78,8 +61,6 @@ final readonly class DefinitionModel
     }
 
     /**
-     * Vytvori typ s validovanymi atributy
-     *
      * @param array<string,int|string|null> $values
      */
     public function createType(array $values): int
@@ -90,8 +71,6 @@ final readonly class DefinitionModel
     }
 
     /**
-     * Ulozi atributy typu a zvysi revizi cele definice
-     *
      * @param array<string,int|string|null> $values
      */
     public function updateType(int $id, array $values, int $revision): void
@@ -99,9 +78,6 @@ final readonly class DefinitionModel
         $this->database->table('cms_content_type')->where('id', $id)->set($values + ['revision' => $revision + 1, 'updated_at' => date('Y-m-d H:i:s')])->update();
     }
 
-    /**
-     * Vytvori nebo posune existujici radek layoutu
-     */
     public function saveRow(int $typeId, ?int $id, int $position): int
     {
         if ($id !== null) {
@@ -115,8 +91,6 @@ final readonly class DefinitionModel
     }
 
     /**
-     * Ulozi pole bez zmeny jeho stabilni identity
-     *
      * @param array<string,int|string|null> $values
      */
     public function saveField(int $typeId, ?int $id, array $values): int
@@ -133,7 +107,7 @@ final readonly class DefinitionModel
     }
 
     /**
-     * Aktualizuje moznosti podle stabilniho kodu a chybejici archivuje
+     * Missing options are archived to preserve existing value references.
      *
      * @param list<array{code:string,name:string}> $options
      */
@@ -152,9 +126,6 @@ final readonly class DefinitionModel
         }
     }
 
-    /**
-     * Chrani scope definice pred skrytim jiz ulozenych hodnot
-     */
     public function fieldHasValues(int $fieldId): bool
     {
         if (!$this->database->tableExists('cms_content_record_value')) {

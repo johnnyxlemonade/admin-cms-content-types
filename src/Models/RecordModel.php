@@ -9,18 +9,12 @@ use Lemonade\Cms\ContentTypes\Field\FieldTypeRegistry;
 use Lemonade\Cms\ContentTypes\Record\RecordModule;
 use Lemonade\Framework\Database\Database;
 
-/**
- * Nacita a uklada pouze dynamicke hodnoty; systemova data vlastni CMS Core
- */
 final readonly class RecordModel
 {
-    /**
-     * Nastavuje sdilenou databazi a registrovane storage druhy
-     */
     public function __construct(private Database $database, private FieldTypeRegistry $types) {}
 
     /**
-     * Vrati typy vcetne neaktivnich pro bezpecnou spravu existujiciho obsahu
+     * Disabled types remain registered so existing content stays manageable.
      *
      * @return list<RecordModule>
      */
@@ -30,20 +24,17 @@ final readonly class RecordModel
             return [];
         }
         return array_map(static fn(array $row): RecordModule => new RecordModule(
-            (int) $row['id'],
-            (string) $row['name'],
-            (string) $row['code'],
-            (int) $row['enabled'] === 1 && $row['deleted_at'] === null,
-            $row['description'] === null ? null : (string) $row['description'],
-            (int) ($row['gallery_enabled'] ?? 0) === 1,
-            (int) ($row['attachments_enabled'] ?? 0) === 1,
-            (int) ($row['thumbnail_enabled'] ?? 0) === 1,
+            id: (int) $row['id'],
+            name: (string) $row['name'],
+            typeCode: (string) $row['code'],
+            enabled: (int) $row['enabled'] === 1 && $row['deleted_at'] === null,
+            description: $row['description'] === null ? null : (string) $row['description'],
+            galleryEnabled: (int) ($row['gallery_enabled'] ?? 0) === 1,
+            attachmentsEnabled: (int) ($row['attachments_enabled'] ?? 0) === 1,
+            thumbnailEnabled: (int) ($row['thumbnail_enabled'] ?? 0) === 1,
         ), $this->database->table('cms_content_type')->orderBy('id')->getArray());
     }
 
-    /**
-     * Vrati identitu prekladu bez vytvareni paralelni mutace
-     */
     public function translationId(int $id, string $locale): ?int
     {
         $row = $this->database->table('cms_content_record_translation')->select(['id'])->where('record_id', $id)->where('locale', $locale)->first();
@@ -51,7 +42,7 @@ final readonly class RecordModel
     }
 
     /**
-     * Nacte presne ulozene hodnoty; absence radku se lisi od prazdne hodnoty
+     * A missing row differs from an explicitly empty value when applying defaults.
      *
      * @param list<array<string,mixed>> $fields
      * @return array<int,int|string|null>
@@ -82,7 +73,7 @@ final readonly class RecordModel
     }
 
     /**
-     * Ulozi validovane hodnoty pod zamkem CMS root aggregate
+     * The caller must hold the CMS root lock.
      *
      * @param list<array<string,mixed>> $fields
      * @param array<int,int|string|null> $values
@@ -121,7 +112,7 @@ final readonly class RecordModel
     }
 
     /**
-     * Ochrani globalni povinna pole i pri uprave jineho nepublikovaneho jazyka
+     * Shared required fields must stay valid while any translation is published.
      */
     public function hasOtherPublishedLocale(int $id, string $locale): bool
     {

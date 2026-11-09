@@ -8,9 +8,6 @@ use Lemonade\Framework\Database\Migration\MigrationInterface;
 use Lemonade\Framework\Database\Schema\Blueprint\TableBlueprint;
 use Lemonade\Framework\Database\Schema\Schema;
 
-/**
- * Vytvari minimalni katalog definic obsahovych typu
- */
 final readonly class CreateContentTypes implements MigrationInterface
 {
     public static function identifier(): string
@@ -20,7 +17,6 @@ final readonly class CreateContentTypes implements MigrationInterface
 
     public function up(Schema $schema): void
     {
-        // Katalog typu vcetne vratneho smazani; podrizena data se nemazou.
         $schema->create('cms_content_type', static function (TableBlueprint $table): void {
             $table->id();
             $table->string('code', 64);

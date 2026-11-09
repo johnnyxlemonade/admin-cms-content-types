@@ -7,14 +7,8 @@ namespace Lemonade\Cms\ContentTypes\Tests\Unit;
 use Lemonade\Cms\ContentTypes\Exception\DefinitionValidationException;
 use PHPUnit\Framework\Attributes\DataProvider;
 
-/**
- * Overuje typovana pravidla vcetne hranic a neplatnych defaultu
- */
 final class DefinitionValidationTest extends DefinitionTestCase
 {
-    /**
-     * Normalizuje nezavisle prepinace a chybejici vstupy na vypnuto
-     */
     public function testSystemMediaDefaultsAndIndependentValues(): void
     {
         $base = ['name' => 'Type', 'description' => 'Description'];
@@ -51,7 +45,7 @@ final class DefinitionValidationTest extends DefinitionTestCase
         yield 'empty name' => [['name' => ' ']];
         yield 'invalid code' => [['code' => 'bad-code']];
         yield 'long code' => [['code' => str_repeat('a', 65)]];
-        yield 'unsupported kind' => [['kind' => 'gallery']];
+        yield 'unsupported kind' => [['kind' => 'repeater']];
         yield 'irrelevant rule' => [['min_number' => '1']];
         yield 'length range' => [['min_length' => '5', 'max_length' => '2']];
         yield 'short default' => [['min_length' => '5', 'default_value' => 'Hi']];
@@ -99,9 +93,6 @@ final class DefinitionValidationTest extends DefinitionTestCase
         self::assertSame('part', $result['values']['default_option']);
     }
 
-    /**
-     * Ulozi pouze vlastni prezentacni atributy bez zmeny identity a pravidel
-     */
     public function testPresentationAttributesAreOptionalAndNormalized(): void
     {
         $input = ['name' => 'Místo výkonu práce', 'code' => 'workplace', 'kind' => 'text', 'sort_order' => 0, 'localized' => 0];
@@ -115,9 +106,6 @@ final class DefinitionValidationTest extends DefinitionTestCase
         self::assertSame($plain, $custom);
     }
 
-    /**
-     * Odmitne kolizi vlastniho ID s automatickym ID jineho aktivniho pole
-     */
     public function testCustomIdCannotShadowGeneratedId(): void
     {
         $definition = $this->presentationDefinition();
@@ -125,9 +113,6 @@ final class DefinitionValidationTest extends DefinitionTestCase
         $this->validation()->prepare($definition, [], []);
     }
 
-    /**
-     * Archivovane pole nezabira ID; jeho obnoveni musi znovu projit kontrolou
-     */
     public function testArchivedFieldDoesNotReservePresentationId(): void
     {
         $definition = $this->presentationDefinition();
@@ -139,8 +124,6 @@ final class DefinitionValidationTest extends DefinitionTestCase
     }
 
     /**
-     * Sestavi dve pole s kolizi odvozeneho a explicitniho HTML ID
-     *
      * @return array{fields:list<array<string,mixed>>,rows:list<array<string,mixed>>}
      */
     private function presentationDefinition(): array

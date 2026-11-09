@@ -6,19 +6,18 @@ namespace Lemonade\Cms\ContentTypes\Field;
 
 use InvalidArgumentException;
 use Lemonade\Admin\Editor\AdminEditor\Field\AdminEditorFieldDefinition;
+use Lemonade\Admin\Editor\AdminEditor\Field\AdminEditorInputFieldDefinition;
 use Lemonade\Admin\Editor\AdminEditor\Field\Field;
+use Lemonade\Admin\Editor\AdminEditor\Field\SelectField;
+use Lemonade\Admin\Presentation\AdminFileUsageDefinition;
+use LogicException;
 
-/**
- * Explicitne registruje vestavene typy a sklada jejich spolecne atributy
- */
 final readonly class FieldTypeRegistry
 {
     /** @var array<string,FieldTypeInterface> */
     private array $types;
 
     /**
-     * Prijme explicitni seznam typu a odmitne kolize kodu
-     *
      * @param iterable<FieldTypeInterface> $types
      */
     public function __construct(iterable $types)
@@ -34,8 +33,38 @@ final readonly class FieldTypeRegistry
     }
 
     /**
-     * Vrati podporovane kody pro paletu i serverovy whitelist
-     *
+     * Field IDs keep file collections stable across renames and layout changes.
+     */
+    public static function mediaUsage(int $fieldId): string
+    {
+        if ($fieldId <= 0) {
+            throw new InvalidArgumentException('Media field must be persisted.');
+        }
+        return 'field_' . $fieldId;
+    }
+
+    /**
+     * @param array<string,mixed> $field
+     */
+    public function mediaDefinition(string $module, array $field): ?AdminFileUsageDefinition
+    {
+        if ($this->get((string) $field['kind'])->storage() !== null || $field['archived_at'] !== null) {
+            return null;
+        }
+        $image = in_array($field['kind'], ['image', 'gallery'], true);
+        $multiple = in_array($field['kind'], ['gallery', 'files'], true);
+        return new AdminFileUsageDefinition(
+            moduleCode: $module,
+            usage: self::mediaUsage((int) $field['id']),
+            kind: $image ? 'image' : 'file',
+            profile: $image ? 'admin-image' : 'admin-file',
+            multiple: $multiple,
+            sortable: $multiple,
+            imageProfile: $image ? null : 'admin-image',
+        );
+    }
+
+    /**
      * @return list<string>
      */
     public function codes(): array
@@ -43,24 +72,21 @@ final readonly class FieldTypeRegistry
         return array_keys($this->types);
     }
 
-    /**
-     * Vyhleda explicitne registrovany typ
-     */
     public function get(string $code): FieldTypeInterface
     {
         return $this->types[$code] ?? throw new InvalidArgumentException('Unsupported field kind: ' . $code);
     }
 
     /**
-     * Vrati sloupce pravidel a defaultu pro nulovani nepouzitych hodnot
-     *
      * @return array<string,null>
      */
     public function emptyValues(): array
     {
         $values = [];
         foreach ($this->types as $type) {
-            $values['default_' . $type->storage()] = null;
+            if ($type->storage() !== null) {
+                $values['default_' . $type->storage()] = null;
+            }
             foreach ($type->ruleControls() as $name => $control) {
                 if ($control !== null) {
                     $values[$name] = null;
@@ -71,8 +97,6 @@ final readonly class FieldTypeRegistry
     }
 
     /**
-     * Vrati sjednoceny seznam pravidel vcetne modalovych moznosti
-     *
      * @return list<string>
      */
     public function ruleNames(): array
@@ -85,47 +109,52 @@ final readonly class FieldTypeRegistry
     }
 
     /**
-     * Sestavi inspectory ze spolecnych vlastnosti a prispevku jednotlivych typu
-     *
      * @return array<string,list<AdminEditorFieldDefinition>>
      */
     public function inspectors(): array
     {
+        $widths = range(1, 12);
+        $widthOptions = array_combine($widths, array_map(static fn(int $span): string => $span . '/12', $widths));
         $inspectors = [];
         foreach ($this->types as $code => $type) {
-            $inspectors[$code] = [
+            $scalar = $type->storage() !== null;
+            $controls = [
                 Field::text('name', labelKey: 'content-types.fields.name')->required()->attributes(['maxlength' => '180']),
                 Field::text('code', labelKey: 'content-types.fields.code')->help('', 'content-types.editor.code_help')->attributes(['maxlength' => '64']),
-                Field::toggle('required', labelKey: 'content-types.fields.required'),
-                Field::toggle('localized', labelKey: 'content-types.fields.localized'),
+                ...($scalar ? [
+                    Field::toggle('required', labelKey: 'content-types.fields.required'),
+                    Field::toggle('localized', labelKey: 'content-types.fields.localized'),
+                ] : []),
                 Field::textarea('help', labelKey: 'content-types.fields.help'),
                 ...array_values(array_filter($type->ruleControls())),
-                $type->control('default_value', 'content-types.fields.default_value'),
+                ...($scalar ? [$type->control('default_value', 'content-types.fields.default_value')] : []),
                 Field::text('css_class', labelKey: 'content-types.fields.css_class')->attributes(['maxlength' => '255']),
                 Field::text('html_id', labelKey: 'content-types.fields.html_id')->help('', 'content-types.editor.html_id_help')->attributes(['maxlength' => '128']),
-                Field::select('span', labelKey: 'content-types.fields.width')->options(array_combine(range(1, 12), array_map(static fn(int $span): string => $span . '/12', range(1, 12)))),
+                Field::select('span', labelKey: 'content-types.fields.width')->options($widthOptions),
             ];
             $inspectors[$code] = array_map(
                 static fn(AdminEditorFieldDefinition $field): AdminEditorFieldDefinition => $field->helpKey($field->helpTranslationKey() ?? 'content-types.help.' . $field->name()),
-                $inspectors[$code],
+                array_values(array_filter($controls)),
             );
         }
         return $inspectors;
     }
 
     /**
-     * Sestavi control obsahove hodnoty se spolecnymi atributy a pravidly definice
-     *
      * @param array<string,mixed> $definition
      */
-    public function contentField(array $definition): \Lemonade\Admin\Editor\AdminEditor\Field\AdminEditorInputFieldDefinition
+    public function contentField(array $definition): AdminEditorInputFieldDefinition
     {
         $type = $this->get((string) $definition['kind']);
-        $field = $type->control('field_' . $definition['id'])
+        $control = $type->control('field_' . $definition['id']);
+        if ($control === null) {
+            throw new LogicException('Media collections are rendered as custom blocks.');
+        }
+        $field = $control
             ->label((string) $definition['name'])
             ->help((string) ($definition['help'] ?? ''))
             ->required((int) $definition['required'] === 1);
-        if ($field instanceof \Lemonade\Admin\Editor\AdminEditor\Field\SelectField) {
+        if ($field instanceof SelectField) {
             if ($type->storage() === 'option') {
                 $options = ['' => ''];
                 foreach ($definition['options'] as $option) {
@@ -144,12 +173,21 @@ final readonly class FieldTypeRegistry
             $attributes['class'] = (string) $definition['css_class'];
         }
         $projection = $type->editorValues($definition) + $definition;
-        foreach (['min_length' => 'minlength', 'max_length' => 'maxlength', 'min_number' => 'min', 'max_number' => 'max', 'min_date' => 'min', 'max_date' => 'max'] as $rule => $attribute) {
-            if (isset($type->ruleControls()[$rule]) && ($projection[$rule] ?? '') !== '' && $projection[$rule] !== null) {
+        $rules = $type->ruleControls();
+        $ruleAttributes = [
+            'min_length' => 'minlength',
+            'max_length' => 'maxlength',
+            'min_number' => 'min',
+            'max_number' => 'max',
+            'min_date' => 'min',
+            'max_date' => 'max',
+        ];
+        foreach ($ruleAttributes as $rule => $attribute) {
+            if (isset($rules[$rule]) && ($projection[$rule] ?? '') !== '') {
                 $attributes[$attribute] = (string) $projection[$rule];
             }
         }
-        if (isset($type->ruleControls()['decimal_places'])) {
+        if (isset($rules['decimal_places'])) {
             $places = (int) ($definition['decimal_places'] ?? 2);
             $attributes['step'] = $places === 0 ? '1' : '0.' . str_repeat('0', $places - 1) . '1';
         }
@@ -157,18 +195,6 @@ final readonly class FieldTypeRegistry
     }
 
     /**
-     * Vykresli nahled stejnymi canonical controls
-     *
-     * @return array<string,AdminEditorFieldDefinition>
-     */
-    public function previews(): array
-    {
-        return array_map(static fn(FieldTypeInterface $type): AdminEditorFieldDefinition => $type->control('preview')->disabled(), $this->types);
-    }
-
-    /**
-     * Doplnuje projekci konkretniho typu o spolecnou identitu a aktivni moznosti
-     *
      * @param array<string,mixed> $field
      * @return array<string,mixed>
      */
@@ -178,7 +204,17 @@ final readonly class FieldTypeRegistry
         $field['id'] = (int) $field['id'];
         $field['key'] = 'f' . $field['id'];
         $field['archived'] = $field['archived_at'] !== null;
-        $field['options'] = array_map(static fn(array $option): array => ['id' => (int) $option['id'], 'code' => (string) $option['code'], 'name' => (string) $option['name']], array_values(array_filter($field['options'], static fn(array $option): bool => $option['archived_at'] === null)));
+        $options = [];
+        foreach ($field['options'] as $option) {
+            if ($option['archived_at'] === null) {
+                $options[] = [
+                    'id' => (int) $option['id'],
+                    'code' => (string) $option['code'],
+                    'name' => (string) $option['name'],
+                ];
+            }
+        }
+        $field['options'] = $options;
         return $field;
     }
 }

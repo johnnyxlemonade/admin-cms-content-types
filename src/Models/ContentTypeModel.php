@@ -9,16 +9,11 @@ use Lemonade\Admin\DataGrid\Query\QueryPage;
 use Lemonade\Framework\Database\Model;
 use Lemonade\Framework\Database\QueryBuilder;
 
-/**
- * Nacita strankovany prehled definic obsahovych typu
- */
 final class ContentTypeModel extends Model
 {
     protected string $table = 'cms_content_type';
 
     /**
-     * Vyhleda definice a seradi je podle povoleneho sloupce
-     *
      * @return QueryPage<array{id:int,code:string,name:string,enabled:int,deleted_at:string|null}>
      */
     public function listForDataGrid(DataGridQuery $query): QueryPage
@@ -42,9 +37,6 @@ final class ContentTypeModel extends Model
         );
     }
 
-    /**
-     * Pouzije totozne vyhledavani pro radky i celkovy pocet
-     */
     private function filtered(string $search, ?string $status): QueryBuilder
     {
         $builder = $status === 'deleted'

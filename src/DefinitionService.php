@@ -20,14 +20,8 @@ use Lemonade\Cms\ContentTypes\Record\RecordModule;
 use Lemonade\Framework\Database\Exception\DatabaseException;
 use Lemonade\Framework\Http\HttpStatus;
 
-/**
- * Uklada celou definici v auditovane transakci se stabilnimi identitami
- */
 final readonly class DefinitionService
 {
-    /**
-     * Nastavuje persistenci, validaci, autorizaci a transakcni audit
-     */
     public function __construct(
         private DefinitionModel $model,
         private DefinitionValidation $validation,
@@ -39,22 +33,21 @@ final readonly class DefinitionService
     ) {}
 
     /**
-     * Nacte typ a jeho editorovou projekci
-     *
      * @return array<string,mixed>
      */
     public function detail(int $id): array
     {
         $type = $this->model->type($id) ?? throw new EditorEntityNotFoundException('Content type not found.');
         $fields = array_map($this->types->editorField(...), $this->model->fields($id));
+        $columnsByRow = [];
+        foreach ($fields as $field) {
+            if ($field['archived'] === false) {
+                $columnsByRow[(int) ($field['row_id'] ?? 0)][] = ['field' => $field['key'], 'span' => (int) $field['span']];
+            }
+        }
         $rows = [];
         foreach ($this->model->rows($id) as $row) {
-            $columns = [];
-            foreach ($fields as $field) {
-                if ($field['archived'] === false && (int) ($field['row_id'] ?? 0) === (int) $row['id']) {
-                    $columns[] = ['field' => $field['key'], 'span' => (int) $field['span']];
-                }
-            }
+            $columns = $columnsByRow[(int) $row['id']] ?? [];
             if ($columns !== []) {
                 $rows[] = ['id' => (int) $row['id'], 'columns' => $columns];
             }
@@ -65,8 +58,6 @@ final readonly class DefinitionService
     }
 
     /**
-     * Overi opravneni a atomicky ulozi typ vcetne jeho podrazenych definic
-     *
      * @param array<string,mixed> $input
      */
     public function save(?int $id, array $input): int
@@ -93,7 +84,9 @@ final readonly class DefinitionService
                 $prepared = $this->validation->prepare($definition, $storedFields, $storedRows);
                 $storedById = array_column($storedFields, null, 'id');
                 foreach ($prepared as $field) {
-                    if ($field['id'] !== null && (int) $storedById[$field['id']]['localized'] !== (int) $field['values']['localized'] && $this->model->fieldHasValues($field['id'])) {
+                    if ($field['id'] !== null
+                        && (int) $storedById[$field['id']]['localized'] !== (int) $field['values']['localized']
+                        && $this->model->fieldHasValues($field['id'])) {
                         $this->validation->fail('definition', 'localized_in_use');
                     }
                 }
@@ -133,9 +126,6 @@ final readonly class DefinitionService
         }
     }
 
-    /**
-     * Zmeni dostupnost bez zasahu do poli a zvysi revizi pro ochranu otevreneho editoru
-     */
     public function setEnabled(int $id, bool $enabled): void
     {
         $this->requireManagement();
@@ -159,7 +149,7 @@ final readonly class DefinitionService
     }
 
     /**
-     * Smaze nebo obnovi pouze koren definice; obnoveni ponecha typ neaktivni
+     * Restoring a type leaves it disabled; child definitions are preserved.
      */
     public function setDeleted(int $id, bool $deleted): void
     {
@@ -186,9 +176,6 @@ final readonly class DefinitionService
         });
     }
 
-    /**
-     * Chrani vsechny mutace definice stejnym opravnenim
-     */
     private function requireManagement(): void
     {
         if (!$this->authorization->hasPermission(ModuleManifest::CODE . '.manage_definitions')) {

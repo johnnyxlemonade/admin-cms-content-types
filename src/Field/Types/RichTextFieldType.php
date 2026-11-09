@@ -9,9 +9,6 @@ use Lemonade\Admin\Editor\AdminEditor\Field\Field;
 use Lemonade\Cms\ContentTypes\Field\FieldTypeInterface;
 use Lemonade\Cms\ContentTypes\Field\FieldValidation;
 
-/**
- * Definuje richtext pole pomoci sdilenych controls a validacnich operaci
- */
 final readonly class RichTextFieldType implements FieldTypeInterface
 {
     public function code(): string

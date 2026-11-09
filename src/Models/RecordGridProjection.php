@@ -4,14 +4,12 @@ declare(strict_types=1);
 
 namespace Lemonade\Cms\ContentTypes\Models;
 
+use InvalidArgumentException;
 use Lemonade\Admin\Cms\Content\CmsDataGridProjection;
 use Lemonade\Admin\DataGrid\Query\DataGridQuery;
 use Lemonade\Cms\ContentTypes\Field\FieldTypeRegistry;
 use Lemonade\Framework\Database\QueryBuilder;
 
-/**
- * Pripojuje typovane hodnoty indexovanymi poddotazy bez zasahu do CMS scopes
- */
 final readonly class RecordGridProjection implements CmsDataGridProjection
 {
     public const FILTERS = [
@@ -22,8 +20,6 @@ final readonly class RecordGridProjection implements CmsDataGridProjection
     ];
 
     /**
-     * Prijima pouze ulozene definice a explicitni registry storage druhu
-     *
      * @param list<array<string,mixed>> $fields
      */
     public function __construct(private array $fields, private FieldTypeRegistry $types) {}
@@ -51,16 +47,19 @@ final readonly class RecordGridProjection implements CmsDataGridProjection
             $subquery = 'SELECT ' . $alias . '.value_' . $storage . ' FROM ' . $table . ' ' . $alias . ' WHERE ' . $condition;
             $builder = $builder->selectRaw('(' . $subquery . ') AS field_' . $id);
             $filter = $query->filter('field_' . $id);
-            if ($filter !== null && isset(self::FILTERS[$storage])) {
+            if ($filter === null) {
+                continue;
+            }
+            if (isset(self::FILTERS[$storage])) {
                 if (preg_match(self::FILTERS[$storage][1], $filter) !== 1) {
-                    throw new \InvalidArgumentException('Invalid typed field filter.');
+                    throw new InvalidArgumentException('Invalid typed field filter.');
                 }
                 $builder = $builder->whereRaw('(' . $subquery . ') = ?', [$storage === 'datetime' ? str_replace('T', ' ', $filter) . ':00' : $filter]);
             }
-            if ($filter !== null && $storage === 'boolean' && in_array($filter, ['0', '1'], true)) {
+            if ($storage === 'boolean' && in_array($filter, ['0', '1'], true)) {
                 $builder = $builder->whereRaw('(' . $subquery . ') = ?', [(int) $filter]);
             }
-            if ($filter !== null && $storage === 'option') {
+            if ($storage === 'option') {
                 foreach ($field['options'] as $option) {
                     if ($option['code'] === $filter && $option['archived_at'] === null) {
                         $builder = $builder->whereRaw('(' . $subquery . ') = ?', [(int) $option['id']]);

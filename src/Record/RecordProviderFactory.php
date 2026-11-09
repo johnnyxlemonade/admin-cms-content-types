@@ -40,14 +40,8 @@ use Lemonade\Framework\Localization\TranslatorInterface;
 use Lemonade\Framework\Routing\UrlGenerator;
 use Lemonade\Framework\Support\Slug\Slugger;
 
-/**
- * Sklada sdileny requestovy runtime pro explicitne registrovany obsahovy typ
- */
 final readonly class RecordProviderFactory implements ModuleProviderFactoryInterface
 {
-    /**
-     * Prijima scoped container bez registrace dalsich sluzeb za behu
-     */
     public function __construct(private ContainerInterface $container) {}
 
     public function createProvider(string $moduleCode, string $contract, ?string $action = null): object
@@ -61,86 +55,86 @@ final readonly class RecordProviderFactory implements ModuleProviderFactoryInter
         $database = $container->get(Database::class);
         $registry = $container->get(FieldTypeRegistry::class);
         $values = new RecordValues(
-            $module,
-            $container->get(DefinitionModel::class),
-            $container->get(RecordModel::class),
-            $registry,
-            $container->get(FieldValidation::class),
+            module: $module,
+            definitions: $container->get(DefinitionModel::class),
+            model: $container->get(RecordModel::class),
+            types: $registry,
+            validation: $container->get(FieldValidation::class),
         );
         $read = new CmsContentReadModel($database, $definition);
         $lifecycle = new CmsContentLifecycle(
-            $definition,
-            new CmsContentModel($database, $definition),
-            new CmsDomainMapping(RecordData::class),
-            $container->get(CmsRouteReservationService::class),
-            $container->get(Slugger::class),
-            $container->get(CmsAdminRuntime::class),
-            $values,
+            definition: $definition,
+            model: new CmsContentModel($database, $definition),
+            mapping: new CmsDomainMapping(RecordData::class),
+            routes: $container->get(CmsRouteReservationService::class),
+            slugger: $container->get(Slugger::class),
+            runtime: $container->get(CmsAdminRuntime::class),
+            valueWriter: $values,
         );
         if ($contract === ModuleActionHandlerInterface::class) {
             return match ($action) {
                 'create' => StandardEditorAction::create($container->get(EditorDispatcher::class), $moduleCode),
                 'save' => StandardEditorAction::save($container->get(EditorDispatcher::class), $moduleCode),
                 default => new CmsContentAction(
-                    $lifecycle,
-                    $read,
-                    $container->get(LocalActorGuard::class),
-                    $container->get(AuthorizationService::class),
-                    CmsContentActionType::from((string) $action),
-                    $moduleCode,
-                    'records',
+                    lifecycle: $lifecycle,
+                    content: $read,
+                    actors: $container->get(LocalActorGuard::class),
+                    authorization: $container->get(AuthorizationService::class),
+                    type: CmsContentActionType::from((string) $action),
+                    permissionIdentity: $moduleCode,
+                    translationGroup: 'records',
                 ),
             };
         }
         if ($contract === EditorProviderInterface::class) {
             return new RecordEditor(
-                $module,
-                $values,
-                $read,
-                $lifecycle,
-                $container->get(LanguageRegistry::class),
-                $container->get(LocalActorGuard::class),
-                $container->get(RecordEditorValidationSchema::class),
-                $container->get(AdminModuleRouteResolver::class),
-                $container->get(UrlGenerator::class),
-                $container->get(AuthorizationService::class),
-                $container->get(TranslatorInterface::class),
+                module: $module,
+                values: $values,
+                content: $read,
+                service: $lifecycle,
+                languages: $container->get(LanguageRegistry::class),
+                actors: $container->get(LocalActorGuard::class),
+                validation: $container->get(RecordEditorValidationSchema::class),
+                routes: $container->get(AdminModuleRouteResolver::class),
+                urls: $container->get(UrlGenerator::class),
+                authorization: $container->get(AuthorizationService::class),
+                translator: $container->get(TranslatorInterface::class),
             );
         }
         $grid = new RecordDataGrid(
-            $module,
-            $values,
-            $registry,
-            $read,
-            $container->get(AuthorizationService::class),
-            $container->get(TranslatorInterface::class),
-            $container->get(ModuleActionPresentationFactory::class),
-            $container->get(AdminModuleRouteResolver::class),
-            $container->get(UrlGenerator::class),
-            $container->get(LanguageRegistry::class),
-            new CmsContentDataGrid($database, $definition),
+            module: $module,
+            values: $values,
+            types: $registry,
+            content: $read,
+            authorization: $container->get(AuthorizationService::class),
+            translator: $container->get(TranslatorInterface::class),
+            actionPresentation: $container->get(ModuleActionPresentationFactory::class),
+            routes: $container->get(AdminModuleRouteResolver::class),
+            urls: $container->get(UrlGenerator::class),
+            languages: $container->get(LanguageRegistry::class),
+            contentGrid: new CmsContentDataGrid($database, $definition),
         );
         if ($contract === DataGridProviderInterface::class) {
             return $grid;
         }
         if (in_array($contract, [ModuleIndexPageProviderInterface::class, ModuleEditorPageProviderInterface::class], true)) {
             return new RecordPageProvider(
-                $module,
-                $values,
-                $grid,
-                $container->get(AuthorizationService::class),
-                $container->get(TranslatorInterface::class),
-                $container->get(UrlGenerator::class),
-                $container->get(AdminModuleRouteResolver::class),
-                new RecordEditorDefinition(
-                    $module,
-                    $values,
-                    $registry,
-                    $container->get(UrlGenerator::class),
-                    $container->get(AdminModuleRouteResolver::class),
+                module: $module,
+                values: $values,
+                grid: $grid,
+                authorization: $container->get(AuthorizationService::class),
+                translator: $container->get(TranslatorInterface::class),
+                urls: $container->get(UrlGenerator::class),
+                routes: $container->get(AdminModuleRouteResolver::class),
+                adminEditorDefinitions: new RecordEditorDefinition(
+                    module: $module,
+                    values: $values,
+                    types: $registry,
+                    urls: $container->get(UrlGenerator::class),
+                    routes: $container->get(AdminModuleRouteResolver::class),
                 ),
-                $container->get(LocalUserDirectory::class),
-                $container->get(AdminFileUploadComponent::class),
+                users: $container->get(LocalUserDirectory::class),
+                files: $container->get(AdminFileUploadComponent::class),
             );
         }
         throw new InvalidArgumentException('Unsupported content runtime capability.');

@@ -9,9 +9,6 @@ use Lemonade\Framework\Database\Migration\MigrationInterface;
 use Lemonade\Framework\Database\Schema\Blueprint\TableBlueprint;
 use Lemonade\Framework\Database\Schema\Schema;
 
-/**
- * Vytvari sdileny CMS aggregate a relacni hodnoty definovanych poli
- */
 final readonly class CreateContentRecords implements MigrationInterface
 {
     public static function identifier(): string
@@ -21,14 +18,13 @@ final readonly class CreateContentRecords implements MigrationInterface
 
     public function up(Schema $schema): void
     {
-        // Composite klice zabranuji prirazeni ciziho pole nebo Select moznosti.
+        // Composite foreign keys prevent cross-type fields and cross-field options.
         $schema->table('cms_content_field', static function (TableBlueprint $table): void {
             $table->unique(['id', 'type_id'], 'uq_cms_field_type_identity');
         });
         $schema->table('cms_content_field_option', static function (TableBlueprint $table): void {
             $table->unique(['id', 'field_id'], 'uq_cms_option_field_identity');
         });
-        // Systemova data zustavaji ve standardnim CMS root/translation modelu.
         $schema->create('cms_content_record', static function (TableBlueprint $table): void {
             CmsContentSchema::root($table, 'cms_content_record');
             $table->unsignedBigInteger('type_id');
@@ -43,7 +39,7 @@ final readonly class CreateContentRecords implements MigrationInterface
         $schema->create('cms_content_record_translation_tag', static function (TableBlueprint $table): void {
             CmsContentSchema::tags($table, 'cms_content_record', 'cms_content_record_translation');
         });
-        // Oddelene globalni a lokalizovane hodnoty zajistuji UNIQUE bez nullable locale.
+        // Separate value tables enforce uniqueness without a nullable locale.
         foreach (['cms_content_record_value' => false, 'cms_content_record_translation_value' => true] as $name => $localized) {
             $prefix = $localized ? 'ctv' : 'cv';
             $schema->create($name, static function (TableBlueprint $table) use ($localized, $prefix): void {

@@ -14,14 +14,8 @@ use Lemonade\Admin\Identity\LocalActorRequiredException;
 use Lemonade\Cms\ContentTypes\DefinitionService;
 use Lemonade\Framework\Http\HttpStatus;
 
-/**
- * Predava zmenu dostupnosti typu do auditovane service
- */
 final readonly class SetEnabledAction implements ModuleActionHandlerInterface
 {
-    /**
-     * Nastavuje service a cilovy stav registrovane akce
-     */
     public function __construct(private DefinitionService $definitions, private bool $enabled) {}
 
     public function execute(?int $id, array $payload): ModuleActionResult

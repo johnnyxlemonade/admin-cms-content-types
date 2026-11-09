@@ -11,19 +11,35 @@ use Lemonade\Framework\Support\Slug\Slugger;
 use Lemonade\Framework\Validation\FormValidation;
 use Lemonade\Framework\Validation\ValidationSchema;
 
-/**
- * Sdili presne validacni operace; typy je skladaji bez vlastnich kopii pravidel
- */
 final readonly class FieldValidation
 {
-    /**
-     * Pripojuje canonical frameworkovy validator, slugger a lokalizaci
-     */
-    public function __construct(private FormValidation $validation, private Slugger $slugger, private TranslatorInterface $translator) {}
+    public function __construct(
+        private FormValidation $validation,
+        private Slugger $slugger,
+        private TranslatorInterface $translator,
+    ) {}
 
     /**
-     * Normalizuje nazev a stabilni kod typu nebo pole
-     *
+     * @param array<string,mixed> $input
+     * @return array{values:array<string,int|string|null>,options:list<array{code:string,name:string}>}
+     */
+    public function mediaDefinition(array $input): array
+    {
+        foreach (['required', 'localized'] as $flag) {
+            if (!in_array($input[$flag] ?? 0, [0, '0', false, ''], true)) {
+                $this->fail($flag, 'irrelevant');
+            }
+        }
+        foreach ($input as $name => $value) {
+            if (str_starts_with($name, 'default_') && $value !== null && $value !== '') {
+                $this->fail($name, 'irrelevant');
+            }
+        }
+
+        return ['values' => [], 'options' => []];
+    }
+
+    /**
      * @param array<string,mixed> $input
      * @return array{name:string,code:string}
      */
@@ -44,8 +60,6 @@ final readonly class FieldValidation
     }
 
     /**
-     * Overi textove rozsahy a default; HTML delku pocita bez znacek
-     *
      * @param array<string,mixed> $input
      * @return array{values:array<string,int|string|null>,options:list<array{code:string,name:string}>}
      */
@@ -73,8 +87,6 @@ final readonly class FieldValidation
     }
 
     /**
-     * Overi numeric pravidla i default jedinou presnou decimal cestou bez floatu
-     *
      * @param array<string,mixed> $input
      * @return array{values:array<string,int|string|null>,options:list<array{code:string,name:string}>}
      */
@@ -96,12 +108,23 @@ final readonly class FieldValidation
             $this->fail('default_value', 'range');
         }
 
-        return ['values' => ['min_number' => $min, 'max_number' => $max, 'decimal_places' => $decimal ? $scale : null, 'default_' . ($decimal ? 'decimal' : 'integer') => $default === null ? null : ($decimal ? $default : (int) $default)], 'options' => []];
+        $defaultValue = $default;
+        if ($default !== null && !$decimal) {
+            $defaultValue = (int) $default;
+        }
+
+        return [
+            'values' => [
+                'min_number' => $min,
+                'max_number' => $max,
+                'decimal_places' => $decimal ? $scale : null,
+                'default_' . ($decimal ? 'decimal' : 'integer') => $defaultValue,
+            ],
+            'options' => [],
+        ];
     }
 
     /**
-     * Overi skutecna data, jejich rozsah a default v jednom formatu
-     *
      * @param array<string,mixed> $input
      * @return array{values:array<string,int|string|null>,options:list<array{code:string,name:string}>}
      */
@@ -122,12 +145,17 @@ final readonly class FieldValidation
             $this->fail('default_value', 'range');
         }
 
-        return ['values' => ['min_date' => $min?->format('Y-m-d H:i:s'), 'max_date' => $max?->format('Y-m-d H:i:s'), 'default_' . ($withTime ? 'datetime' : 'date') => $default?->format($withTime ? 'Y-m-d H:i:s' : 'Y-m-d')], 'options' => []];
+        return [
+            'values' => [
+                'min_date' => $min?->format('Y-m-d H:i:s'),
+                'max_date' => $max?->format('Y-m-d H:i:s'),
+                'default_' . ($withTime ? 'datetime' : 'date') => $default?->format($withTime ? 'Y-m-d H:i:s' : 'Y-m-d'),
+            ],
+            'options' => [],
+        ];
     }
 
     /**
-     * Overi Select moznosti a clenstvi defaultu ve stejnem seznamu
-     *
      * @param array<string,mixed> $input
      * @return array{values:array<string,int|string|null>,options:list<array{code:string,name:string}>}
      */
@@ -143,8 +171,6 @@ final readonly class FieldValidation
     }
 
     /**
-     * Overi nepovinny nezaporny integer parametr pres framework
-     *
      * @param array<string,mixed> $input
      */
     private function naturalRule(array $input, string $key, int $maximum): ?int
@@ -153,14 +179,16 @@ final readonly class FieldValidation
         if ($value === '') {
             return null;
         }
-        $this->check([$key => $value], ValidationSchema::create()->field($key, $this->translator->get('content-types.fields.' . $key))->integer()->greaterThanOrEqualTo(0)->lessThanOrEqualTo($maximum)->end());
+        $schema = ValidationSchema::create()
+            ->field($key, $this->translator->get('content-types.fields.' . $key))
+                ->integer()->greaterThanOrEqualTo(0)->lessThanOrEqualTo($maximum)
+            ->end();
+        $this->check([$key => $value], $schema);
 
         return (int) $value;
     }
 
     /**
-     * Overuje moznosti Selectu s oddelenym kodem a zobrazovanym nazvem
-     *
      * @return list<array{code:string,name:string}>
      */
     public function options(mixed $input): array
@@ -188,8 +216,6 @@ final readonly class FieldValidation
     }
 
     /**
-     * Odmitne strukturovany vstup misto textove hodnoty
-     *
      * @param array<string,mixed> $input
      */
     public function text(array $input, string $key): string
@@ -203,8 +229,6 @@ final readonly class FieldValidation
     }
 
     /**
-     * Normalizuje standardni boolean transport bez implicitnich truthy hodnot
-     *
      * @param array<string,mixed> $input
      */
     public function boolean(array $input, string $key): int
@@ -217,9 +241,6 @@ final readonly class FieldValidation
         return $value === '1' ? 1 : 0;
     }
 
-    /**
-     * Overi cislo bez ztraty presnosti a omezi je na podporovanou SQL presnost
-     */
     private function number(string $value, int $scale, string $field): string
     {
         if (preg_match('/^-?(?:0|[1-9][0-9]{0,15})(?:\.([0-9]+))?$/D', $value, $matches) !== 1 || strlen($matches[1] ?? '') > $scale) {
@@ -230,7 +251,7 @@ final readonly class FieldValidation
     }
 
     /**
-     * Porovna presna desetinna cisla bez float konverze
+     * Avoid float conversion: values may use the full DECIMAL(24,8) precision.
      */
     public static function compareNumbers(string $left, string $right): int
     {
@@ -250,9 +271,6 @@ final readonly class FieldValidation
         return strcmp($leftDigits, $rightDigits) * ($leftNegative ? -1 : 1);
     }
 
-    /**
-     * Overi skutecne datum a presny browser format
-     */
     private function date(string $value, bool $withTime, string $field): DateTimeImmutable
     {
         $format = $withTime ? 'Y-m-d\TH:i' : 'Y-m-d';
@@ -265,8 +283,6 @@ final readonly class FieldValidation
     }
 
     /**
-     * Pouzije frameworkovy validator a zachova chyby podle poli
-     *
      * @param array<string,mixed> $input
      */
     public function check(array $input, ValidationSchema $schema): void
@@ -277,9 +293,6 @@ final readonly class FieldValidation
         }
     }
 
-    /**
-     * Vrati lokalizovanou chybu vztahu mezi hodnotami definice
-     */
     public function fail(string $field, string $reason): never
     {
         throw new DefinitionValidationException([$field => $this->translator->get('content-types.validation.' . $reason)]);

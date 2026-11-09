@@ -12,11 +12,13 @@ use Lemonade\Admin\Module\AdminNavigationGroup;
 use Lemonade\Admin\Module\Contract\AdminModuleDefinitionInterface;
 use Lemonade\Admin\Modules\Manifest\ModuleManifestInterface;
 use Lemonade\Admin\Modules\Migration\ModuleMigrationManifestInterface;
+use Lemonade\Cms\ContentTypes\Migrations\AddContentTypeSystemMedia;
+use Lemonade\Cms\ContentTypes\Migrations\AddContentTypeThumbnail;
+use Lemonade\Cms\ContentTypes\Migrations\CreateContentFieldDefinitions;
+use Lemonade\Cms\ContentTypes\Migrations\CreateContentRecords;
+use Lemonade\Cms\ContentTypes\Migrations\CreateContentTypes;
 use Lemonade\Framework\Database\Migration\MigrationInterface;
 
-/**
- * Deklaruje prehled definic obsahovych typu a jeho schema
- */
 final readonly class ModuleManifest implements ModuleManifestInterface, ModuleMigrationManifestInterface, AdminModuleDefinitionInterface
 {
     public const string CODE = 'cms.content-types';
@@ -37,18 +39,16 @@ final readonly class ModuleManifest implements ModuleManifestInterface, ModuleMi
     }
 
     /**
-     * Pripoji schema definic do globalniho migration lifecycle
-     *
      * @return list<class-string<MigrationInterface>>
      */
     public function migrations(): array
     {
         return [
-            Migrations\CreateContentTypes::class,
-            Migrations\CreateContentFieldDefinitions::class,
-            Migrations\CreateContentRecords::class,
-            Migrations\AddContentTypeSystemMedia::class,
-            Migrations\AddContentTypeThumbnail::class,
+            CreateContentTypes::class,
+            CreateContentFieldDefinitions::class,
+            CreateContentRecords::class,
+            AddContentTypeSystemMedia::class,
+            AddContentTypeThumbnail::class,
         ];
     }
 
@@ -66,8 +66,6 @@ final readonly class ModuleManifest implements ModuleManifestInterface, ModuleMi
     }
 
     /**
-     * Deklaruje cteni a oddelenou spravu definic
-     *
      * @return list<PermissionDefinition>
      */
     public function permissionDefinitions(): array
@@ -79,8 +77,6 @@ final readonly class ModuleManifest implements ModuleManifestInterface, ModuleMi
     }
 
     /**
-     * Deklaruje auditovane zmeny cele definice
-     *
      * @return list<AuditEventDefinition>
      */
     public function auditEventDefinitions(): array

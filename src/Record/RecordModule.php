@@ -16,14 +16,8 @@ use Lemonade\Admin\Presentation\AdminFileCapabilities;
 use Lemonade\Admin\Presentation\AdminFilePresentation;
 use Lemonade\Cms\Content\CmsContentDefinition;
 
-/**
- * Pripojuje ulozeny typ k existujicim Admin registrum bez dalsiho Composer modulu
- */
 final readonly class RecordModule implements AdminModuleDefinitionInterface, AdminModuleFileCapabilitiesInterface
 {
-    /**
-     * Nastavuje stabilni identitu a uzivatelsky nazev typu
-     */
     public function __construct(
         private int $id,
         private string $name,
@@ -35,9 +29,6 @@ final readonly class RecordModule implements AdminModuleDefinitionInterface, Adm
         private bool $thumbnailEnabled = false,
     ) {}
 
-    /**
-     * Povoli pouze systemove media usages aktivni v definici typu
-     */
     public function fileCapabilities(): AdminFileCapabilities
     {
         return new AdminFileCapabilities(
@@ -47,25 +38,16 @@ final readonly class RecordModule implements AdminModuleDefinitionInterface, Adm
         );
     }
 
-    /**
-     * Urcuje dostupnost systemoveho hlavniho obrazku v editoru zaznamu
-     */
     public function thumbnailEnabled(): bool
     {
         return $this->thumbnailEnabled;
     }
 
-    /**
-     * Urcuje dostupnost systemove galerie v editoru zaznamu
-     */
     public function galleryEnabled(): bool
     {
         return $this->galleryEnabled;
     }
 
-    /**
-     * Urcuje dostupnost systemovych priloh v editoru zaznamu
-     */
     public function attachmentsEnabled(): bool
     {
         return $this->attachmentsEnabled;
@@ -76,9 +58,6 @@ final readonly class RecordModule implements AdminModuleDefinitionInterface, Adm
         return 'cms.type_' . $this->id;
     }
 
-    /**
-     * Vrati nekolidujici segment sdilenych administracnich rout
-     */
     public function segment(): string
     {
         return 'type-' . str_replace('_', '-', $this->typeCode);
@@ -100,9 +79,6 @@ final readonly class RecordModule implements AdminModuleDefinitionInterface, Adm
         );
     }
 
-    /**
-     * Ohranici vsechny CMS dotazy typem ve sdilenych tabulkach
-     */
     public function contentDefinition(): CmsContentDefinition
     {
         return new CmsContentDefinition(
@@ -202,41 +178,26 @@ final readonly class RecordModule implements AdminModuleDefinitionInterface, Adm
         ];
     }
 
-    /**
-     * Vraci stabilni identitu obsahoveho typu
-     */
     public function id(): int
     {
         return $this->id;
     }
 
-    /**
-     * Vraci uzivatelsky nazev obsahoveho typu
-     */
     public function name(): string
     {
         return $this->name;
     }
 
-    /**
-     * Vraci stabilni technicky kod obsahoveho typu
-     */
     public function typeCode(): string
     {
         return $this->typeCode;
     }
 
-    /**
-     * Urcuje zda je obsahovy typ aktivni
-     */
     public function enabled(): bool
     {
         return $this->enabled;
     }
 
-    /**
-     * Vraci uzivatelsky popis obsahoveho typu
-     */
     public function description(): ?string
     {
         return $this->description;

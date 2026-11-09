@@ -23,14 +23,8 @@ use Lemonade\Framework\Routing\Router;
 use Lemonade\Framework\Routing\UrlGenerator;
 use PHPUnit\Framework\TestCase;
 
-/**
- * Overuje parametrizovane hledani a strankovani read-only prehledu
- */
 final class ContentTypesDataGridTest extends TestCase
 {
-    /**
-     * Pouzije stejny filtr pro pocet i radky a vrati strankovany vysledek
-     */
     public function testSearchAndPaginationUseSharedDataGridTransport(): void
     {
         $queries = [];
@@ -62,9 +56,6 @@ final class ContentTypesDataGridTest extends TestCase
         self::assertStringContainsString('LIMIT 25', $queries[0]['sql']);
     }
 
-    /**
-     * Pohled smazanych pouziva stejny rozsah pro data i pocet
-     */
     public function testDeletedViewFiltersBothQueries(): void
     {
         $queries = [];
@@ -87,9 +78,6 @@ final class ContentTypesDataGridTest extends TestCase
         }
     }
 
-    /**
-     * Prazdna databaze poskytne platnou prazdnou stranku bez akci
-     */
     public function testEmptyCatalogReturnsAnEmptyPage(): void
     {
         $driver = $this->createMock(DatabaseDriverInterface::class);
@@ -106,9 +94,6 @@ final class ContentTypesDataGridTest extends TestCase
         self::assertSame(0, $page->total());
     }
 
-    /**
-     * Nabizi editaci a pouze opacny stav; ctenari nepridava zadnou mutaci
-     */
     public function testManagementActionsRespectPermissionAndEnabledState(): void
     {
         $driver = $this->createMock(DatabaseDriverInterface::class);
@@ -142,9 +127,6 @@ final class ContentTypesDataGridTest extends TestCase
         }
     }
 
-    /**
-     * Sklada read-only grid se skutecnou autorizaci bez prihlaseneho aktora
-     */
     private function grid(DatabaseDriverInterface $driver, bool $manage = false): ContentTypesDataGrid
     {
         $translator = $this->createMock(TranslatorInterface::class);

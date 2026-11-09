@@ -16,6 +16,7 @@ use Lemonade\Admin\Editor\AdminEditor\Layout\CmsEditorSaveBar;
 use Lemonade\Admin\Editor\AdminEditor\Layout\CmsMediaSection;
 use Lemonade\Admin\Editor\AdminEditor\Layout\CmsOwnershipSection;
 use Lemonade\Admin\Editor\AdminEditor\Layout\CmsPublicationSection;
+use Lemonade\Admin\Editor\AdminEditor\Layout\CustomViewBlock;
 use Lemonade\Admin\Editor\AdminEditor\Layout\FieldColumn;
 use Lemonade\Admin\Editor\AdminEditor\Layout\FieldGroupBlock;
 use Lemonade\Admin\Editor\AdminEditor\Layout\SectionBlock;
@@ -25,14 +26,8 @@ use Lemonade\Admin\Presentation\AdminFileUploadCollection;
 use Lemonade\Cms\ContentTypes\Field\FieldTypeRegistry;
 use Lemonade\Framework\Routing\UrlGenerator;
 
-/**
- * Sestavuje standardni CMS editor z relacni definice bez noveho rendereru
- */
 final readonly class RecordEditorDefinition
 {
-    /**
-     * Pripojuje existujici controls, layout a canonical routy
-     */
     public function __construct(
         private RecordModule $module,
         private RecordValues $values,
@@ -42,19 +37,19 @@ final readonly class RecordEditorDefinition
     ) {}
 
     /**
-     * Sklada obsah, SEO, publikaci a vlastnictvi ve sdilenem AdminEditoru
-     *
      * @param array<string,mixed> $article
      * @param array<int,string> $ownerOptions
+     * @param array<int,AdminFileUploadCollection> $mediaUploads
      */
     public function create(
         array $article,
         string $contentLocale,
         bool $canPublish,
         bool $canAssignOwner = false,
-        array $ownerOptions = [],
-        ?AdminEditorHeaderContextDefinition $context = null,
         bool $otherPublishedLocale = false,
+        array $ownerOptions = [],
+        array $mediaUploads = [],
+        ?AdminEditorHeaderContextDefinition $context = null,
         ?AdminFileUploadCollection $galleryUpload = null,
         ?AdminFileUploadCollection $attachmentUpload = null,
         ?AdminFileUploadCollection $thumbnailUpload = null,
@@ -70,49 +65,56 @@ final readonly class RecordEditorDefinition
                 novalidate: true,
             ))
             ->header(CmsEditorHeader::create(
-                'records',
-                $this->urls->route($this->routes->managementRouteName($segment, 'index'), ['module' => $segment]),
-                $context,
+                module: 'records',
+                indexUrl: $this->urls->route($this->routes->managementRouteName($segment, 'index'), ['module' => $segment]),
+                context: $context,
                 moduleName: $this->module->name(),
             ))
             ->saveBar(CmsEditorSaveBar::create());
-        $blocks = [
+
+        $translation = $article['translations'][0] ?? [];
+        $publicationState = (int) ($translation['publication_state'] ?? 0);
+        $title = Field::text('title', labelKey: 'records.fields.title')
+            ->required()
+            ->help('', 'admin.cms_validation.required_help')
+            ->placeholder('', 'admin.datagrid.untitled')
+            ->attributes(['maxlength' => '180'] + CmsPublicationSection::requiredAttributes($publicationState, $canPublish));
+        $author = Field::text('author_name', labelKey: 'records.fields.author_name')->attributes(['maxlength' => '255']);
+        $contentBlocks = [
             Field::hidden('locale')->defaultValue($contentLocale),
             new FieldGroupBlock([
-                new FieldColumn(Field::text('title', labelKey: 'records.fields.title')->required()->help('', 'admin.cms_validation.required_help')->placeholder('', 'admin.datagrid.untitled')->attributes(['maxlength' => '180'] + CmsPublicationSection::requiredAttributes((int) ($article['translations'][0]['publication_state'] ?? 0), $canPublish)), md: 12),
-                new FieldColumn(Field::text('author_name', labelKey: 'records.fields.author_name')->attributes(['maxlength' => '255']), md: 12),
+                new FieldColumn($title, md: 12),
+                new FieldColumn($author, md: 12),
             ]),
         ];
-        $rows = [];
-        foreach ($this->values->activeFields() as $definition) {
-            $field = $this->types->contentField($definition);
-            if ($field->isRequired()) {
-                $globalRequired = (int) $definition['localized'] !== 1 && $otherPublishedLocale;
-                $attributes = CmsPublicationSection::requiredAttributes(
-                    (int) ($article['translations'][0]['publication_state'] ?? 0),
-                    $canPublish,
-                    $globalRequired,
-                    'content-types.validation.required',
-                );
-                $field = $field->attributes($attributes + $field->inputAttributes());
-            }
-            $rows[(int) $definition['row_id']][] = new FieldColumn($field, md: (int) $definition['span']);
+        $contentFields = $this->contentFields(
+            publicationState: $publicationState,
+            canPublish: $canPublish,
+            otherPublishedLocale: $otherPublishedLocale,
+            mediaUploads: $mediaUploads,
+        );
+        if ($contentFields !== null) {
+            $contentBlocks[] = $contentFields;
         }
-        if ($rows !== []) {
-            $blocks[] = new SectionBlock(
-                id: 'content-fields',
-                blocks: array_map(static fn(array $columns): FieldGroupBlock => new FieldGroupBlock($columns), array_values($rows)),
-                descriptionKey: 'records.editor.required_for_publication',
-            );
-        }
-        $builder->tab(new AdminEditorTab('content', '', $blocks, labelKey: 'records.editor.tabs.content', default: true))
-            ->tab(SeoSection::tab(pathPrefix: '/', autoGenerateUrl: trim((string) ($article['translations'][0]['canonical_path'] ?? '')) === ''));
+
+        $builder->tab(new AdminEditorTab(
+            id: 'content',
+            label: '',
+            blocks: $contentBlocks,
+            labelKey: 'records.editor.tabs.content',
+            default: true,
+        ));
+        $builder->tab(SeoSection::tab(
+            pathPrefix: '/',
+            autoGenerateUrl: trim((string) ($translation['canonical_path'] ?? '')) === '',
+        ));
         if ($this->module->galleryEnabled()) {
             $builder->tab(CmsMediaSection::gallery('records', $galleryUpload));
         }
         if ($this->module->attachmentsEnabled()) {
             $builder->tab(CmsMediaSection::attachments('records', $attachmentUpload));
         }
+
         $sidebar = [];
         $publication = CmsPublicationSection::create('records', $canPublish);
         if ($publication !== null) {
@@ -123,6 +125,51 @@ final readonly class RecordEditorDefinition
         if ($thumbnail !== null) {
             $sidebar[] = $thumbnail;
         }
+
         return $builder->sidebar(new AdminEditorSidebarDefinition($sidebar))->build();
+    }
+
+    /**
+     * @param array<int,AdminFileUploadCollection> $mediaUploads
+     */
+    private function contentFields(
+        int $publicationState,
+        bool $canPublish,
+        bool $otherPublishedLocale,
+        array $mediaUploads,
+    ): ?SectionBlock {
+        $rows = [];
+        foreach ($this->values->activeFields() as $definition) {
+            if ($this->types->get((string) $definition['kind'])->storage() === null) {
+                $field = new CustomViewBlock('content-types::media-field', [
+                    'definition' => $definition,
+                    'uploadCollection' => $mediaUploads[(int) $definition['id']] ?? null,
+                ]);
+            } else {
+                $field = $this->types->contentField($definition);
+                if ($field->isRequired()) {
+                    $attributes = CmsPublicationSection::requiredAttributes(
+                        state: $publicationState,
+                        canPublish: $canPublish,
+                        globallyRequired: (int) $definition['localized'] !== 1 && $otherPublishedLocale,
+                        messageKey: 'content-types.validation.required',
+                    );
+                    $field = $field->attributes($attributes + $field->inputAttributes());
+                }
+            }
+            $rows[(int) $definition['row_id']][] = new FieldColumn(
+                $field,
+                md: (int) $definition['span'],
+            );
+        }
+        if ($rows === []) {
+            return null;
+        }
+
+        return new SectionBlock(
+            id: 'content-fields',
+            blocks: array_map(static fn(array $columns): FieldGroupBlock => new FieldGroupBlock($columns), array_values($rows)),
+            descriptionKey: 'records.editor.required_for_publication',
+        );
     }
 }

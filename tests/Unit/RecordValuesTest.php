@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Lemonade\Cms\ContentTypes\Tests\Unit;
 
 use Lemonade\Admin\Editor\AdminEditor\Field\AdminEditorInputFieldDefinition;
+use Lemonade\Admin\Editor\AdminEditor\Layout\CustomViewBlock;
 use Lemonade\Admin\Editor\AdminEditor\Layout\FieldGroupBlock;
 use Lemonade\Admin\Editor\AdminEditor\Layout\SectionBlock;
 use Lemonade\Admin\Module\AdminModuleRegistry;
@@ -36,16 +37,12 @@ use Lemonade\Framework\Support\Slug\Slugger;
 use Lemonade\Framework\Validation\FormValidation;
 use Lemonade\Framework\Validation\Rule\RuleRegistry;
 use Lemonade\Framework\Validation\ValidationRuleResolver;
+use OutOfBoundsException;
 use PHPUnit\Framework\Attributes\DataProvider;
 
-/**
- * Overuje pouziti stejnych typovych pravidel pro obsah a definice
- */
 final class RecordValuesTest extends DefinitionTestCase
 {
     /**
-     * Pokryva hranice povolenych hodnot i strukturovany nepovoleny vstup
-     *
      * @return iterable<string,array{string,array<string,mixed>,mixed}>
      */
     public static function invalidValues(): iterable
@@ -72,7 +69,7 @@ final class RecordValuesTest extends DefinitionTestCase
     #[DataProvider('invalidValues')]
     public function testInvalidValuesRejectedEvenInDraft(string $kind, array $rules, mixed $value): void
     {
-        $writer = $this->writer($kind, $rules);
+        $writer = $this->writer($kind, rules: $rules);
         $this->expectException(DefinitionValidationException::class);
         $writer->prepare(12, 'cs', CmsPublicationState::Draft, new RecordData(null, ['field_8' => $value]));
     }
@@ -94,16 +91,13 @@ final class RecordValuesTest extends DefinitionTestCase
 
     public function testDefaultAppliesOnlyToMissingValue(): void
     {
-        $writer = $this->writer('text', ['default_value' => 'Fallback']);
+        $writer = $this->writer('text', rules: ['default_value' => 'Fallback']);
         self::assertSame('Fallback', $writer->editorValues(12, 'cs')['field_8']);
         self::assertTrue($writer->prepare(12, 'cs', CmsPublicationState::Published, new RecordData(null, [])));
         $this->expectException(DefinitionValidationException::class);
         $writer->prepare(12, 'cs', CmsPublicationState::Published, new RecordData(null, ['field_8' => '']));
     }
 
-    /**
-     * Prazdne HTML zustava konceptem, ale nelze je publikovat
-     */
     #[DataProvider('emptyRichtext')]
     public function testRequiredRichtextRejectsEmptyHtmlOnPublication(string $value): void
     {
@@ -118,8 +112,6 @@ final class RecordValuesTest extends DefinitionTestCase
     }
 
     /**
-     * Vraci prazdne vystupy editoru vcetne HTML entit
-     *
      * @return iterable<string,array{string}>
      */
     public static function emptyRichtext(): iterable
@@ -132,9 +124,6 @@ final class RecordValuesTest extends DefinitionTestCase
         yield 'numeric space' => ['<div>&#160;</div>'];
     }
 
-    /**
-     * Vraci vsechna chybna pole najednou pod jejich transportnimi jmeny
-     */
     public function testPublicationCollectsErrorsForEveryMissingField(): void
     {
         try {
@@ -145,9 +134,6 @@ final class RecordValuesTest extends DefinitionTestCase
         }
     }
 
-    /**
-     * Povinnost klienta respektuje publikaci, opravneni a sdileni hodnot mezi jazyky
-     */
     public function testEditorRequiredHintUsesPublicationContext(): void
     {
         $module = new RecordModule(1, 'Type', 'type', true);
@@ -188,9 +174,6 @@ final class RecordValuesTest extends DefinitionTestCase
         }
     }
 
-    /**
-     * Novy draft i existujici zaznam odkazuji na seznam sveho typu
-     */
     public function testEditorBreadcrumbUsesDynamicTypeName(): void
     {
         $modules = new AdminModuleRegistry(new AdminNavigationGroupRegistry());
@@ -224,8 +207,6 @@ final class RecordValuesTest extends DefinitionTestCase
     }
 
     /**
-     * Overi nezavisle systemove komponenty a usages ve vsech osmi stavech
-     *
      * @return iterable<string,array{bool,bool,bool}>
      */
     public static function mediaCombinations(): iterable
@@ -240,9 +221,6 @@ final class RecordValuesTest extends DefinitionTestCase
         yield 'all' => [true, true, true];
     }
 
-    /**
-     * Vypnuta usage zmizi z editoru i serveroveho registru bez zmeny identity
-     */
     #[DataProvider('mediaCombinations')]
     public function testSystemMediaCombinations(bool $thumbnail, bool $gallery, bool $attachments): void
     {
@@ -301,18 +279,43 @@ final class RecordValuesTest extends DefinitionTestCase
                     self::assertSame('admin-image', $fileUsage->profile());
                     self::assertSame(AdminFilePresentation::Landscape, $fileUsage->presentation());
                 }
-            } catch (\OutOfBoundsException) {
+            } catch (OutOfBoundsException) {
                 self::assertFalse($enabled);
             }
         }
     }
 
+    public function testMediaUseCustomColumnsAndNeverScalarValues(): void
+    {
+        foreach (['image', 'gallery', 'file', 'files'] as $kind) {
+            $writer = $this->writer($kind, fieldCount: 2, localized: 0);
+            self::assertSame([], $writer->editorValues(12, 'cs'));
+            self::assertFalse($writer->prepare(12, 'cs', CmsPublicationState::Published, new RecordData(null, ['field_8' => '999'])));
+            $module = new RecordModule(1, 'Type', 'type', true);
+            $modules = new AdminModuleRegistry(new AdminNavigationGroupRegistry());
+            $modules->register($module);
+            $router = new Router();
+            (new AdminModuleRouteRegistrar($modules))->registerRoutes($router);
+            $definition = new RecordEditorDefinition($module, $writer, $this->types(), new UrlGenerator($router), new AdminModuleRouteResolver($modules));
+            $editor = $definition->create(['id' => 12, 'translations' => []], 'cs', false);
+            $sections = array_values(array_filter($editor->tabs()[0]->blocks(), static fn($block): bool => $block instanceof SectionBlock));
+            self::assertCount(1, $sections);
+            $group = $sections[0]->blocks()[0];
+            self::assertInstanceOf(FieldGroupBlock::class, $group);
+            self::assertCount(2, $group->columns());
+            foreach ($group->columns() as $index => $column) {
+                $block = $column->field();
+                self::assertInstanceOf(CustomViewBlock::class, $block);
+                self::assertSame(8 + $index, $block->context()['definition']['id']);
+                self::assertSame(12, $column->md());
+            }
+        }
+    }
+
     /**
-     * Ohranicuje SQL port; registry a vsechny validacni operace zustavaji skutecne
-     *
      * @param array<string,mixed> $rules
      */
-    private function writer(string $kind, array $rules = [], int $fieldCount = 1, int $localized = 1): RecordValues
+    private function writer(string $kind, int $fieldCount = 1, int $localized = 1, array $rules = []): RecordValues
     {
         $types = $this->types();
         $translator = $this->createMock(TranslatorInterface::class);

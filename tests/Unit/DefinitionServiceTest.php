@@ -11,6 +11,7 @@ use Lemonade\Admin\Auth\LocalAdminPrincipal;
 use Lemonade\Admin\Authorization\AuthorizationService;
 use Lemonade\Admin\Authorization\CurrentPrincipalProviderInterface;
 use Lemonade\Admin\Editor\Exception\EditorCapabilityException;
+use Lemonade\Admin\Editor\Exception\EditorEntityNotFoundException;
 use Lemonade\Admin\Event\DomainEvent;
 use Lemonade\Admin\Event\DomainEventDispatcher;
 use Lemonade\Admin\Event\TransactionalEventProcessor;
@@ -27,9 +28,6 @@ use Lemonade\Framework\Database\DatabaseResultInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Psr\Log\NullLogger;
 
-/**
- * Testuje mutace pres skutecny service, model, transakcni processor a autorizaci
- */
 final class DefinitionServiceTest extends DefinitionTestCase
 {
     /** @var list<array{sql:string,bindings:array<mixed>|false}> */
@@ -37,9 +35,6 @@ final class DefinitionServiceTest extends DefinitionTestCase
     /** @var list<DomainEvent> */
     private array $audits = [];
 
-    /**
-     * Prazdny popis odmitne create i update bez zapisu a auditu
-     */
     public function testDescriptionIsRequiredForCreationAndUpdate(): void
     {
         foreach ([null, 7] as $id) {
@@ -66,9 +61,6 @@ final class DefinitionServiceTest extends DefinitionTestCase
         self::assertNotEmpty(array_filter($this->writes, static fn(array $write): bool => str_contains($write['sql'], 'INSERT INTO cms_content_field ')));
     }
 
-    /**
-     * Vypnuti medii meni pouze definici typu a nikdy nemaze soubory
-     */
     public function testMediaSwitchesAreSavedWithoutDeletingFiles(): void
     {
         $input = $this->input(true);
@@ -177,9 +169,6 @@ final class DefinitionServiceTest extends DefinitionTestCase
         }
     }
 
-    /**
-     * Deaktivace zachova podrazene definice a zaznamena jednu zmenu revize
-     */
     public function testDisableOnlyChangesTypeAndAudits(): void
     {
         $result = (new SetEnabledAction($this->service(true, true), false))->execute(7, []);
@@ -193,9 +182,6 @@ final class DefinitionServiceTest extends DefinitionTestCase
         self::assertSame('7', $this->audits[0]->entityKey());
     }
 
-    /**
-     * Aktivace obnovi dostupnost bez vytvareni nove identity typu
-     */
     public function testEnableActionRestoresAvailability(): void
     {
         $result = (new SetEnabledAction($this->service(true, true, false), true))->execute(7, []);
@@ -208,9 +194,6 @@ final class DefinitionServiceTest extends DefinitionTestCase
         self::assertSame('cms.content-types.enabled', $this->audits[0]->code());
     }
 
-    /**
-     * Action transport zachova serverove odmitnuti uzivatele s pouhym ctenim
-     */
     public function testActionMapsPermissionDenialToForbidden(): void
     {
         try {
@@ -223,9 +206,6 @@ final class DefinitionServiceTest extends DefinitionTestCase
         }
     }
 
-    /**
-     * Action transport vraci not found pro neznamou identitu
-     */
     public function testActionMapsMissingTypeToNotFound(): void
     {
         foreach ([null, 7] as $id) {
@@ -240,9 +220,6 @@ final class DefinitionServiceTest extends DefinitionTestCase
         }
     }
 
-    /**
-     * Opakovane nastaveni stejneho stavu nezapisuje ani neaudituje
-     */
     public function testSettingCurrentStateIsNoOp(): void
     {
         $this->service(true, true)->setEnabled(7, true);
@@ -250,9 +227,6 @@ final class DefinitionServiceTest extends DefinitionTestCase
         self::assertSame([], $this->audits);
     }
 
-    /**
-     * Prime volani bez prava spravy odmita i existujici typ
-     */
     public function testAvailabilityChangeRequiresManagement(): void
     {
         $this->expectException(EditorCapabilityException::class);
@@ -264,12 +238,9 @@ final class DefinitionServiceTest extends DefinitionTestCase
         }
     }
 
-    /**
-     * Neznamy typ nevede k zapisu ani udalosti
-     */
     public function testAvailabilityChangeRejectsMissingType(): void
     {
-        $this->expectException(\Lemonade\Admin\Editor\Exception\EditorEntityNotFoundException::class);
+        $this->expectException(EditorEntityNotFoundException::class);
         try {
             $this->service()->setEnabled(7, false);
         } finally {
@@ -278,9 +249,6 @@ final class DefinitionServiceTest extends DefinitionTestCase
         }
     }
 
-    /**
-     * Soft delete meni pouze koren; definice poli a moznosti se nemazou
-     */
     public function testDeletePreservesDefinitionAndAudits(): void
     {
         $result = (new SetDeletedAction($this->service(true, true), true))->execute(7, []);
@@ -294,9 +262,6 @@ final class DefinitionServiceTest extends DefinitionTestCase
         self::assertSame('7', $this->audits[0]->entityKey());
     }
 
-    /**
-     * Obnova ponecha typ neaktivni a zachova puvodni identitu
-     */
     public function testRestoreKeepsTypeInactiveAndAudits(): void
     {
         $result = (new SetDeletedAction($this->service(true, true, false, true), false))->execute(7, []);
@@ -308,9 +273,6 @@ final class DefinitionServiceTest extends DefinitionTestCase
         self::assertSame('cms.content-types.restored', $this->audits[0]->code());
     }
 
-    /**
-     * Opakovane smazani ani obnova existujiciho stavu nic nemeni
-     */
     public function testRepeatedDeleteAndRestoreAreNoOps(): void
     {
         $this->service(true, true, false, true)->setDeleted(7, true);
@@ -319,9 +281,6 @@ final class DefinitionServiceTest extends DefinitionTestCase
         self::assertSame([], $this->audits);
     }
 
-    /**
-     * Mazani i obnoveni vyzaduji spravu definic i pri primem volani akce
-     */
     public function testDeleteAndRestoreRequireManagement(): void
     {
         foreach ([true, false] as $deleted) {
@@ -336,9 +295,6 @@ final class DefinitionServiceTest extends DefinitionTestCase
         }
     }
 
-    /**
-     * Smazany typ nelze nacist do editoru, ulozit ani aktivovat
-     */
     public function testDeletedTypeRejectsEditingAndActivation(): void
     {
         foreach (['load', 'save', 'enable'] as $operation) {
@@ -350,7 +306,7 @@ final class DefinitionServiceTest extends DefinitionTestCase
                     'enable' => $service->setEnabled(7, true),
                 };
                 self::fail('Deleted type was editable.');
-            } catch (\Lemonade\Admin\Editor\Exception\EditorEntityNotFoundException) {
+            } catch (EditorEntityNotFoundException) {
                 self::assertSame([], $this->writes);
                 self::assertSame([], $this->audits);
             }
@@ -370,9 +326,6 @@ final class DefinitionServiceTest extends DefinitionTestCase
         return ['name' => 'Type', 'code' => 'type', 'description' => 'Test content type', 'enabled' => 1, 'revision' => 1, 'definition' => json_encode(['fields' => [$field], 'rows' => [$row]], JSON_THROW_ON_ERROR)];
     }
 
-    /**
-     * Ohranicuje DB porty; produkcni validace, SQL a audit zustavaji soucasti testu
-     */
     private function service(bool $allowed = true, bool $existing = false, bool $enabled = true, bool $deleted = false): DefinitionService
     {
         $driver = $this->createMock(DatabaseDriverInterface::class);

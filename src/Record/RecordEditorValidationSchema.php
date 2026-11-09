@@ -9,27 +9,10 @@ use Lemonade\Cms\CmsPublicationState;
 use Lemonade\Framework\Localization\TranslatorInterface;
 use Lemonade\Framework\Validation\ValidationSchema;
 
-/**
- * Sklada frameworkovou validaci create a update vstupu editoru Aktualit
- */
 final readonly class RecordEditorValidationSchema
 {
-    /**
-     * Nastavuje prekladovy zdroj chyb editorove validace
-     */
     public function __construct(private TranslatorInterface $translator) {}
 
-    /**
-     * Ponechava create bez formulovych hodnot pro okamzite zalozeni draftu
-     */
-    public function forCreate(): ValidationSchema
-    {
-        return ValidationSchema::create();
-    }
-
-    /**
-     * Vymezuje flat payload jedne lokalizovane mutation a globalnich metadat
-     */
     public function forUpdate(): ValidationSchema
     {
         return CmsDisplaySettings::validation(ValidationSchema::create()

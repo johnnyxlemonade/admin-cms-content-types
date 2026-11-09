@@ -11,7 +11,7 @@
 without generating separate Composer packages, PHP classes or database tables.
 
 Definitions use the shared AdminEditor, with drag-and-drop field layout, an
-inspector, Select options and a responsive live preview. Supported fields are
+an inspector and Select options. Supported fields are
 text, textarea, rich text, integer, decimal, boolean, date, datetime and select.
 Fields support defaults, validation rules, localized values and presentation
 attributes. Definitions and typed values are stored relationally, without JSON
@@ -26,11 +26,17 @@ content enforce them. Type and range validation also applies to drafts.
 The Admin UI supports CS/EN; user-entered names, help and Select labels remain
 unchanged when switching the UI language. Deactivating a type hides its navigation
 item and prevents new records while preserving existing data and permissions.
-Groups, repeaters, relations and custom media fields are not supported yet.
+Custom `image`, `gallery`, `file` and `files` fields use shared Admin file collections
+in the Builder layout. Media are optional, non-localized and have no default value.
+Each collection uses the record module code, root record ID and `field_<field ID>`;
+file IDs are never duplicated into scalar value tables. Renaming or moving a field
+preserves its collection. Archiving unregisters its usage without deleting files;
+restoring the definition reconnects the same collection. Groups, repeaters and
+relations are not supported.
 Each content type can independently enable the shared CMS thumbnail, gallery and
 attachments. All three are off by default. Disabling a feature hides its editor
 component and rejects its file operations without deleting existing files; enabling
-it again restores access to the same collection. Field-scoped media remain unsupported.
+it again restores access to the same collection. System media usages remain independent of custom field collections.
 Existing CMS modules are not migrated. The host application owns public frontend
 rendering and enforces publication visibility; this package generates no frontend.
 

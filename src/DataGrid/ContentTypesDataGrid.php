@@ -27,14 +27,8 @@ use Lemonade\Cms\ContentTypes\ModuleManifest;
 use Lemonade\Framework\Localization\TranslatorInterface;
 use Lemonade\Framework\Routing\UrlGenerator;
 
-/**
- * Poskytuje prehled definic s autorizovanymi akcemi spravy
- */
 final readonly class ContentTypesDataGrid implements DataGridProviderInterface
 {
-    /**
-     * Nastavuje zdroj definic pro sdileny DataGrid
-     */
     public function __construct(
         private ContentTypeModel $types,
         private AuthorizationService $authorization,
@@ -87,8 +81,6 @@ final readonly class ContentTypesDataGrid implements DataGridProviderInterface
     }
 
     /**
-     * Sestavi odkaz do Builderu a vratnou zmenu dostupnosti typu
-     *
      * @param array{id:int,code:string,name:string,enabled:int,deleted_at:string|null} $row
      */
     private function row(array $row): DataGridRowDefinition

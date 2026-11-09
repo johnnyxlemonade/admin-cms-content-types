@@ -10,19 +10,11 @@ use Lemonade\Cms\ContentTypes\Field\FieldTypeRegistry;
 use Lemonade\Cms\ContentTypes\Field\FieldValidation;
 use Lemonade\Framework\Validation\ValidationSchema;
 
-/**
- * Overuje spolecne definice, stabilni identity a konzistenci layoutu
- */
 final readonly class DefinitionValidation
 {
-    /**
-     * Pripojuje explicitni typy a jedinou sdilenou implementaci validacnich operaci
-     */
     public function __construct(private FieldTypeRegistry $types, private FieldValidation $values) {}
 
     /**
-     * Pouzije sdilenou validaci nazvu a stabilniho technickeho kodu
-     *
      * @param array<string,mixed> $input
      * @return array{name:string,code:string}
      */
@@ -32,8 +24,6 @@ final readonly class DefinitionValidation
     }
 
     /**
-     * Overi spolecne atributy typu
-     *
      * @param array<string,mixed> $input
      * @return array<string,int|string|null>
      */
@@ -55,8 +45,6 @@ final readonly class DefinitionValidation
     }
 
     /**
-     * Overi spolecne vlastnosti a konzistenci pravidel; specifika deleguje typu
-     *
      * @param array<string,mixed> $input
      * @return array{values:array<string,int|string|null>,options:list<array{code:string,name:string}>}
      */
@@ -74,14 +62,18 @@ final readonly class DefinitionValidation
             }
         }
         $definition = $type->validate($input, $this->values);
-        $definition['values'] = $identity + ['kind' => $kind, 'required' => $this->values->boolean($input, 'required'), 'localized' => $this->values->boolean($input, 'localized'), 'sort_order' => (int) $input['sort_order'], 'help' => $this->values->text($input, 'help')] + $definition['values'] + $this->types->emptyValues();
+        $definition['values'] = $identity + [
+            'kind' => $kind,
+            'required' => $this->values->boolean($input, 'required'),
+            'localized' => $this->values->boolean($input, 'localized'),
+            'sort_order' => (int) $input['sort_order'],
+            'help' => $this->values->text($input, 'help'),
+        ] + $definition['values'] + $this->types->emptyValues();
         $definition['values'] += $this->presentation($input);
         return $definition;
     }
 
     /**
-     * Overi pouze prezentacni atributy bez zmeny identity nebo obsahove validace
-     *
      * @param array<string,mixed> $input
      * @return array{css_class:string|null,html_id:string|null}
      */
@@ -98,17 +90,12 @@ final readonly class DefinitionValidation
         return ['css_class' => $classes === '' ? null : $classes, 'html_id' => $id === '' ? null : $id];
     }
 
-    /**
-     * Prevede chybu konzistence na standardni lokalizovanou validacni chybu
-     */
     public function fail(string $field, string $reason): never
     {
         $this->values->fail($field, $reason);
     }
 
     /**
-     * Dekoduje pouze omezeny transport definice, nikoliv databazovou JSON persistenci
-     *
      * @return array{fields:list<array<string,mixed>>,rows:list<array<string,mixed>>}
      */
     public function definition(mixed $payload): array
@@ -139,8 +126,6 @@ final readonly class DefinitionValidation
     }
 
     /**
-     * Overi vlastnictvi ID, nemenne klice, duplicity a Bootstrap layout pred zapisem
-     *
      * @param array{fields:list<array<string,mixed>>,rows:list<array<string,mixed>>} $definition
      * @param list<array<string,mixed>> $storedFields
      * @param list<array<string,mixed>> $storedRows
@@ -170,15 +155,7 @@ final readonly class DefinitionValidation
                         $this->fail('definition', 'immutable');
                     }
                 }
-                $optionById = array_column($existing[$id]['options'], null, 'id');
-                foreach (is_array($input['options'] ?? null) ? $input['options'] : [] as $option) {
-                    if (!is_array($option)) {
-                        $this->fail('definition', 'option');
-                    }
-                    if (isset($option['id']) && (!is_int($option['id']) || !isset($optionById[$option['id']]) || $optionById[$option['id']]['code'] !== ($option['code'] ?? null))) {
-                        $this->fail('definition', 'immutable');
-                    }
-                }
+                $this->validateOptionIdentity($input, $existing[$id]);
             }
             $input['sort_order'] = $index;
             try {
@@ -211,12 +188,37 @@ final readonly class DefinitionValidation
         if (count($seenIds) !== count($existing)) {
             $this->fail('definition', 'incomplete');
         }
-        return $this->layout($definition['rows'], $storedRows, $keys, $prepared);
+        return $this->layout(
+            rows: $definition['rows'],
+            storedRows: $storedRows,
+            keys: $keys,
+            prepared: $prepared,
+        );
     }
 
     /**
-     * Overi vlastnictvi radku, jedno umisteni aktivniho pole a kapacitu 12 sloupcu
-     *
+     * @param array<string,mixed> $input
+     * @param array<string,mixed> $existing
+     */
+    private function validateOptionIdentity(array $input, array $existing): void
+    {
+        $optionsById = array_column($existing['options'], null, 'id');
+        $options = is_array($input['options'] ?? null) ? $input['options'] : [];
+        foreach ($options as $option) {
+            if (!is_array($option)) {
+                $this->fail('definition', 'option');
+            }
+            if (isset($option['id']) && (
+                !is_int($option['id'])
+                || !isset($optionsById[$option['id']])
+                || $optionsById[$option['id']]['code'] !== ($option['code'] ?? null)
+            )) {
+                $this->fail('definition', 'immutable');
+            }
+        }
+    }
+
+    /**
      * @param list<array<string,mixed>> $rows
      * @param list<array<string,mixed>> $storedRows
      * @param array<string,int> $keys
@@ -225,12 +227,12 @@ final readonly class DefinitionValidation
      */
     private function layout(array $rows, array $storedRows, array $keys, array $prepared): array
     {
-        $rowIds = array_column($storedRows, 'id');
+        $rowIds = array_map(intval(...), array_column($storedRows, 'id'));
         $seenRows = [];
         $placed = [];
         foreach ($rows as $position => $row) {
             if (isset($row['id'])) {
-                if (!is_int($row['id']) || !in_array($row['id'], array_map(intval(...), $rowIds), true) || isset($seenRows[$row['id']])) {
+                if (!is_int($row['id']) || !in_array($row['id'], $rowIds, true) || isset($seenRows[$row['id']])) {
                     $this->fail('definition', 'invalid');
                 }
                 $seenRows[$row['id']] = true;
@@ -238,9 +240,15 @@ final readonly class DefinitionValidation
             if (!isset($row['columns']) || !is_array($row['columns']) || !array_is_list($row['columns']) || $row['columns'] === []) {
                 $this->fail('definition', 'layout');
             }
-            $sum = 0;
+            $rowWidth = 0;
             foreach ($row['columns'] as $column) {
-                if (!is_array($column) || !is_string($column['field'] ?? null) || !isset($keys[$column['field']]) || isset($placed[$column['field']]) || !is_int($column['span'] ?? null) || $column['span'] < 1 || $column['span'] > 12) {
+                if (!is_array($column)
+                    || !is_string($column['field'] ?? null)
+                    || !isset($keys[$column['field']])
+                    || isset($placed[$column['field']])
+                    || !is_int($column['span'] ?? null)
+                    || $column['span'] < 1
+                    || $column['span'] > 12) {
                     $this->fail('definition', 'layout');
                 }
                 $index = $keys[$column['field']];
@@ -250,9 +258,9 @@ final readonly class DefinitionValidation
                 $placed[$column['field']] = true;
                 $prepared[$index]['row'] = $position;
                 $prepared[$index]['values']['span'] = $column['span'];
-                $sum += $column['span'];
+                $rowWidth += $column['span'];
             }
-            if ($sum > 12) {
+            if ($rowWidth > 12) {
                 $this->fail('definition', 'layout');
             }
         }

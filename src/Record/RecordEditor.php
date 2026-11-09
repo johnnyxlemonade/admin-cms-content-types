@@ -28,17 +28,12 @@ use Lemonade\Framework\Localization\TranslatorInterface;
 use Lemonade\Framework\Routing\UrlGenerator;
 use Lemonade\Framework\Validation\ValidationSchema;
 
-/**
- * Propojuje editor zaznamu s existujicim CMS lifecycle
- */
 final readonly class RecordEditor implements
     EditorProviderInterface,
     EditorAccessPolicyInterface,
     EditorFieldAccessPolicyInterface
 {
     /**
-     * Pripojuje CMS persistenci, validaci, jazyky a autorizaci editoru
-     *
      * @param CmsContentLifecycle<RecordData> $service
      */
     public function __construct(
@@ -55,9 +50,6 @@ final readonly class RecordEditor implements
         private TranslatorInterface $translator,
     ) {}
 
-    /**
-     * Deklaruje transportni pole editoru vcetne dynamic translations payloadu
-     */
     public function editorDefinition(): EditorDefinition
     {
         return new EditorDefinition(
@@ -79,7 +71,7 @@ final readonly class RecordEditor implements
                     'text',
                     false,
                     null,
-                ), $this->values->activeFields()),
+                ), $this->values->scalarFields()),
                 new EditorFieldDefinition(name: 'locale', type: 'text', readOnly: false, permission: null),
                 new EditorFieldDefinition(name: 'title', type: 'text', readOnly: false, permission: null),
                 new EditorFieldDefinition(name: 'summary', type: 'text', readOnly: false, permission: null),
@@ -91,9 +83,6 @@ final readonly class RecordEditor implements
         );
     }
 
-    /**
-     * Overi globalni nebo vlastnicky pristup ke cteni zaznamu
-     */
     public function loadAccessDecision(int $id): bool
     {
         return $this->authorization->canForOwner(
@@ -103,9 +92,6 @@ final readonly class RecordEditor implements
         );
     }
 
-    /**
-     * Overi globalni nebo vlastnicky pristup k beznemu ulozeni zaznamu
-     */
     public function saveAccessDecision(int $id): bool
     {
         return $this->authorization->canForOwner(
@@ -115,9 +101,6 @@ final readonly class RecordEditor implements
         );
     }
 
-    /**
-     * Overi publish pole proti aktualnimu vlastnikovi root aggregate
-     */
     public function fieldAccessDecision(int $id, string $field): ?bool
     {
         if (!in_array($field, ['publication_state', 'published_at'], true)) {
@@ -131,9 +114,6 @@ final readonly class RecordEditor implements
         );
     }
 
-    /**
-     * Nacte existujici obsahovy zaznam pro editaci
-     */
     public function updateData(int $id): array
     {
         $article = $this->content->findForEditor($id);
@@ -144,9 +124,6 @@ final readonly class RecordEditor implements
         return ['article' => $article, 'locales' => $this->content->editorLocales($id)];
     }
 
-    /**
-     * Vrati prazdny editorovy stav pro nepouzitou fallback create route
-     */
     public function createData(): array
     {
         $locales = $this->languages->enabledLocales();
@@ -162,29 +139,20 @@ final readonly class RecordEditor implements
         ];
     }
 
-    /**
-     * Vrati prazdnou validaci pro okamzite zalozeni draftu bez vstupu uzivatele
-     */
     public function createValidationSchema(): ValidationSchema
     {
         return ValidationSchema::create();
     }
 
-    /**
-     * Vrati validaci pro zmenu globalnich dat a aktualni content mutation
-     */
     public function updateValidationSchema(int $id): ValidationSchema
     {
         $schema = $this->validation->forUpdate();
-        foreach ($this->values->activeFields() as $field) {
+        foreach ($this->values->scalarFields() as $field) {
             $schema->field('field_' . $field['id'], (string) $field['name']);
         }
         return $schema;
     }
 
-    /**
-     * Ulozi predane neprazdne mutation a lifecycle zaznamu
-     */
     public function update(int $id, array $data): EditorSaveResult
     {
         try {
@@ -214,9 +182,6 @@ final readonly class RecordEditor implements
         );
     }
 
-    /**
-     * Zalozi minimalni draft v canonical vychozim content locale
-     */
     public function create(array $data): EditorSaveResult
     {
         try {
@@ -244,9 +209,6 @@ final readonly class RecordEditor implements
         );
     }
 
-    /**
-     * Vytvori canonical edit URL se zachovanym content locale
-     */
     private function editUrl(int $articleId, string $locale): string
     {
         return $this->urls->route(

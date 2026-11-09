@@ -14,14 +14,8 @@ use Lemonade\Admin\Identity\LocalActorRequiredException;
 use Lemonade\Cms\ContentTypes\DefinitionService;
 use Lemonade\Framework\Http\HttpStatus;
 
-/**
- * Predava smazani nebo obnoveni typu do auditovane service
- */
 final readonly class SetDeletedAction implements ModuleActionHandlerInterface
 {
-    /**
-     * Nastavuje service a cilovy stav registrovane akce
-     */
     public function __construct(private DefinitionService $definitions, private bool $deleted) {}
 
     public function execute(?int $id, array $payload): ModuleActionResult

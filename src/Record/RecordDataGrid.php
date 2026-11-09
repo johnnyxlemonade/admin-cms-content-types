@@ -32,14 +32,8 @@ use Lemonade\Cms\ContentTypes\Models\RecordGridProjection;
 use Lemonade\Framework\Localization\TranslatorInterface;
 use Lemonade\Framework\Routing\UrlGenerator;
 
-/**
- * Promita obsahove zaznamy do sdileneho DataGridu bez dotazu pro jednotlive radky
- */
 final readonly class RecordDataGrid implements DataGridProviderInterface
 {
-    /**
-     * Pripojuje CMS projekci, definice poli a autorizaci DataGridu
-     */
     public function __construct(
         private RecordModule $module,
         private RecordValues $values,
@@ -54,17 +48,11 @@ final readonly class RecordDataGrid implements DataGridProviderInterface
         private CmsContentDataGrid $contentGrid,
     ) {}
 
-    /**
-     * Vrati pravo potrebne pro nacteni prehledu zaznamu
-     */
     public function permission(): string
     {
         return $this->module->code() . '.view_own';
     }
 
-    /**
-     * Deklaruje sloupce, search, filtry a deterministic razeni prehledu
-     */
     public function dataGridDefinition(): DataGridDefinition
     {
         return new DataGridDefinition(
@@ -124,9 +112,6 @@ final readonly class RecordDataGrid implements DataGridProviderInterface
         );
     }
 
-    /**
-     * Vrati typed radky z jedine batch projekce obsahu modelu
-     */
     public function execute(DataGridQuery $query): DataGridResult
     {
         $canViewAll = $this->authorization->hasPermission($this->module->code() . '.view');
@@ -138,7 +123,7 @@ final readonly class RecordDataGrid implements DataGridProviderInterface
             $query,
             $this->languages->defaultLocale(),
             $ownerId,
-            projection: new RecordGridProjection($this->values->activeFields(), $this->types),
+            projection: new RecordGridProjection($this->values->scalarFields(), $this->types),
         );
         $rows = array_map($this->row(...), $page->items());
 
@@ -146,8 +131,6 @@ final readonly class RecordDataGrid implements DataGridProviderInterface
     }
 
     /**
-     * Vytvori standardni radek s auditnimi udaji a autorizovanymi akcemi
-     *
      * @param array<string,mixed> $article
      */
     private function row(array $article): DataGridRowDefinition
@@ -185,13 +168,15 @@ final readonly class RecordDataGrid implements DataGridProviderInterface
                 'updatedAt' => $this->auditMetadataCell($article['updated_at'] ?? null, $article['updated_by_name'] ?? null),
                 'deletedAt' => $this->auditMetadataCell($article['deleted_at'] ?? null, $article['deleted_by_name'] ?? null),
             ],
-            actions: $this->rowActions($articleId, $deleted, $locale, $ownerId),
+            actions: $this->rowActions(
+                articleId: $articleId,
+                ownerId: $ownerId,
+                contentLocale: $locale,
+                deleted: $deleted,
+            ),
         );
     }
 
-    /**
-     * Vrati lokalizovany label publication stavu z databazove hodnoty
-     */
     private function publicationStateLabel(int $value): string
     {
         $state = CmsPublicationState::tryFrom($value) ?? CmsPublicationState::New;
@@ -204,15 +189,13 @@ final readonly class RecordDataGrid implements DataGridProviderInterface
     }
 
     /**
-     * Nabizi editaci pouze jako neautoritativni presentation akci
-     *
      * @return list<DataGridRowActionDefinition>
      */
     private function rowActions(
         int $articleId,
-        bool $deleted,
-        string $contentLocale,
         ?int $ownerId,
+        string $contentLocale,
+        bool $deleted,
     ): array {
         $actions = [];
         if (!$deleted && $this->authorization->canForOwner($this->module->code() . '.edit', $this->module->code() . '.edit_own', $ownerId)) {
@@ -223,13 +206,13 @@ final readonly class RecordDataGrid implements DataGridProviderInterface
                 method: 'GET',
             ))->withIcon(AdminIcon::PencilSquare);
         }
-        $canChangeLifecycle = $deleted
-            ? $this->authorization->canForOwner($this->module->code() . '.restore', $this->module->code() . '.restore_own', $ownerId)
-            : $this->authorization->canForOwner($this->module->code() . '.delete', $this->module->code() . '.delete_own', $ownerId);
+        $lifecycleAction = $deleted ? 'restore' : 'delete';
+        $permission = $this->module->code() . '.' . $lifecycleAction;
+        $canChangeLifecycle = $this->authorization->canForOwner($permission, $permission . '_own', $ownerId);
         if ($canChangeLifecycle) {
             $action = $this->actionPresentation->rowAction(
                 moduleCode: $this->module->code(),
-                action: $deleted ? 'restore' : 'delete',
+                action: $lifecycleAction,
                 entityId: $articleId,
             );
             if ($action !== null) {
@@ -240,9 +223,6 @@ final readonly class RecordDataGrid implements DataGridProviderInterface
         return $actions;
     }
 
-    /**
-     * Zobrazi auditni datum nad identitou uzivatele
-     */
     private function auditMetadataCell(mixed $date, mixed $actor): StackedCell
     {
         $date = trim((string) $date);
@@ -254,9 +234,6 @@ final readonly class RecordDataGrid implements DataGridProviderInterface
         );
     }
 
-    /**
-     * Zobrazi datum bez sekund podle jazyka administrace
-     */
     private function formatDateTime(mixed $value): string
     {
         $text = trim((string) $value);
@@ -275,9 +252,6 @@ final readonly class RecordDataGrid implements DataGridProviderInterface
         });
     }
 
-    /**
-     * Sklada canonical URL editoru s explicitni content locale mutace
-     */
     private function editUrl(int $articleId, ?string $contentLocale = null): string
     {
         $url = $this->urls->route(
@@ -289,8 +263,6 @@ final readonly class RecordDataGrid implements DataGridProviderInterface
     }
 
     /**
-     * Nabizi vlastni sloupce ve standardnim vyberu viditelnosti
-     *
      * @return list<DataGridColumnDefinition>
      */
     private function customColumns(): array
@@ -302,18 +274,16 @@ final readonly class RecordDataGrid implements DataGridProviderInterface
             configurable: true,
             visibleByDefault: false,
             label: (string) $field['name'],
-        ), $this->values->activeFields());
+        ), $this->values->scalarFields());
     }
 
     /**
-     * Nabizi jednoznacne SQL filtry bool a Select bez obecneho query jazyka
-     *
      * @return list<DataGridFilterDefinition>
      */
     private function customFilters(): array
     {
         $filters = [];
-        foreach ($this->values->activeFields() as $field) {
+        foreach ($this->values->scalarFields() as $field) {
             $storage = $this->types->get((string) $field['kind'])->storage();
             $options = [];
             if ($storage === 'boolean') {
@@ -350,15 +320,13 @@ final readonly class RecordDataGrid implements DataGridProviderInterface
     }
 
     /**
-     * Promita vlastni hodnoty jako escapovane scalar bunky vcetne Select nazvu
-     *
      * @param array<string,mixed> $row
      * @return array<string,ScalarCell>
      */
     private function customCells(array $row): array
     {
         $cells = [];
-        foreach ($this->values->activeFields() as $field) {
+        foreach ($this->values->scalarFields() as $field) {
             $key = 'field_' . $field['id'];
             $value = $row[$key] ?? null;
             $storage = $this->types->get((string) $field['kind'])->storage();

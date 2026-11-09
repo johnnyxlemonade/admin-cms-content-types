@@ -15,14 +15,8 @@ use Lemonade\Cms\ContentTypes\ModuleManifest;
 use Lemonade\Framework\Routing\UrlGenerator;
 use Lemonade\Framework\Validation\ValidationSchema;
 
-/**
- * Pripojuje editor definic ke sdilenemu save transportu a zamkum
- */
 final readonly class ContentTypesEditor implements EditorProviderInterface
 {
-    /**
-     * Nastavuje auditovanou sluzbu a generovani navratove URL
-     */
     public function __construct(private DefinitionService $definitions, private UrlGenerator $urls) {}
 
     public function editorDefinition(): EditorDefinition
@@ -33,13 +27,31 @@ final readonly class ContentTypesEditor implements EditorProviderInterface
             loadPermission: $permission,
             savePermission: $permission,
             createPermission: $permission,
-            fields: array_map(static fn(string $name): EditorFieldDefinition => new EditorFieldDefinition($name, 'text', false, null), ['name', 'code', 'description', 'enabled', 'thumbnail_enabled', 'gallery_enabled', 'attachments_enabled', 'revision', 'definition']),
+            fields: array_map(
+                static fn(string $name): EditorFieldDefinition => new EditorFieldDefinition(
+                    name: $name,
+                    type: 'text',
+                    readOnly: false,
+                    permission: null,
+                ),
+                ['name', 'code', 'description', 'enabled', 'thumbnail_enabled', 'gallery_enabled', 'attachments_enabled', 'revision', 'definition'],
+            ),
         );
     }
 
     public function createData(): array
     {
-        return ['type' => ['name' => '', 'code' => '', 'description' => '', 'enabled' => 1, 'thumbnail_enabled' => 0, 'gallery_enabled' => 0, 'attachments_enabled' => 0, 'revision' => 0, 'definition' => '{"fields":[],"rows":[]}']];
+        return ['type' => [
+            'name' => '',
+            'code' => '',
+            'description' => '',
+            'enabled' => 1,
+            'thumbnail_enabled' => 0,
+            'gallery_enabled' => 0,
+            'attachments_enabled' => 0,
+            'revision' => 0,
+            'definition' => '{"fields":[],"rows":[]}',
+        ]];
     }
 
     public function updateData(int $id): array
@@ -77,8 +89,6 @@ final readonly class ContentTypesEditor implements EditorProviderInterface
     }
 
     /**
-     * Prevede domenove chyby do standardniho editoroveho vysledku
-     *
      * @param array<string,mixed> $data
      */
     private function save(?int $id, array $data): EditorSaveResult

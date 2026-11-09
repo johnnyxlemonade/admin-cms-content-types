@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Lemonade\Cms\ContentTypes\Tests\Unit;
 
+use Lemonade\Cms\ContentTypes\CmsContentTypesServiceProvider;
 use Lemonade\Cms\ContentTypes\DefinitionValidation;
 use Lemonade\Cms\ContentTypes\Field\FieldTypeRegistry;
 use Lemonade\Cms\ContentTypes\Field\FieldValidation;
@@ -15,14 +16,8 @@ use Lemonade\Framework\Validation\Rule\RuleRegistry;
 use Lemonade\Framework\Validation\ValidationRuleResolver;
 use PHPUnit\Framework\TestCase;
 
-/**
- * Sdili skutecny frameworkovy validator pro testy definic
- */
 abstract class DefinitionTestCase extends TestCase
 {
-    /**
-     * Pouzije produkcni pravidla bez databazovych zavislosti
-     */
     protected function validation(): DefinitionValidation
     {
         $translator = $this->createMock(TranslatorInterface::class);
@@ -33,13 +28,10 @@ abstract class DefinitionTestCase extends TestCase
         return new DefinitionValidation($this->types(), new FieldValidation(new FormValidation($translator, new ValidationRuleResolver(new RuleRegistry(), $container)), new Slugger(), $translator));
     }
 
-    /**
-     * Nacte registry pres skutecnou provider factory po zmrazeni containeru
-     */
     protected function types(): FieldTypeRegistry
     {
         $container = new Container();
-        (new \Lemonade\Cms\ContentTypes\CmsContentTypesServiceProvider())->register($container);
+        (new CmsContentTypesServiceProvider())->register($container);
         $container->freeze();
         return $container->get(FieldTypeRegistry::class);
     }

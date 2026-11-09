@@ -18,14 +18,8 @@ use Lemonade\Cms\ContentTypes\Editor\ContentTypesEditorDefinition;
 use Lemonade\Framework\Localization\TranslatorInterface;
 use Lemonade\Framework\Routing\UrlGenerator;
 
-/**
- * Sklada prehled a editor definic obsahovych typu
- */
 final readonly class ContentTypesModulePageProvider implements ModuleIndexPageProviderInterface, ModuleEditorPageProviderInterface
 {
-    /**
-     * Nastavuje DataGrid a lokalizovane texty indexove prezentace
-     */
     public function __construct(
         private ContentTypesDataGrid $grid,
         private TranslatorInterface $translator,
@@ -39,9 +33,6 @@ final readonly class ContentTypesModulePageProvider implements ModuleIndexPagePr
         return 'cms.content-types.view';
     }
 
-    /**
-     * Sestavuje DataGrid stranku pro aktivni jazyk administrace
-     */
     public function index(string $locale): ModulePage
     {
         $viewModel = new DataGridIndexViewModel(

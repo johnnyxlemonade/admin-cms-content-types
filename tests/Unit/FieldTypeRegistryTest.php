@@ -4,27 +4,22 @@ declare(strict_types=1);
 
 namespace Lemonade\Cms\ContentTypes\Tests\Unit;
 
+use InvalidArgumentException;
 use Lemonade\Cms\ContentTypes\Field\FieldTypeRegistry;
+use Lemonade\Cms\ContentTypes\Field\Types\TextFieldType;
 use PHPUnit\Framework\Attributes\DataProvider;
 
-/**
- * Overuje jediny explicitni katalog typu a soulad controls s normalizaci
- */
 final class FieldTypeRegistryTest extends DefinitionTestCase
 {
-    /**
-     * Kazdy typ ma stejna spolecna pole a pouze vlastni pravidla
-     */
     public function testRegistryProvidesAllControlsAndRulesWithoutDuplicateCommonFields(): void
     {
         $types = $this->types();
-        self::assertSame(['text', 'textarea', 'richtext', 'integer', 'decimal', 'boolean', 'date', 'datetime', 'select'], $types->codes());
+        self::assertSame(['text', 'textarea', 'richtext', 'integer', 'decimal', 'boolean', 'date', 'datetime', 'select', 'image', 'gallery', 'file', 'files'], $types->codes());
         self::assertSame($types->codes(), array_keys($types->inspectors()));
-        self::assertSame($types->codes(), array_keys($types->previews()));
         foreach ($types->inspectors() as $code => $controls) {
             $names = array_map(static fn($control): string => $control->name(), $controls);
             self::assertSame($names, array_values(array_unique($names)));
-            foreach (['name', 'code', 'required', 'localized', 'help', 'default_value', 'span'] as $name) {
+            foreach (['name', 'code', 'help', 'span'] as $name) {
                 self::assertContains($name, $names);
             }
             foreach ($types->get($code)->ruleControls() as $name => $control) {
@@ -32,7 +27,13 @@ final class FieldTypeRegistryTest extends DefinitionTestCase
                     self::assertContains($name, $names);
                 }
             }
-            self::assertArrayHasKey('default_' . $types->get($code)->storage(), $types->emptyValues());
+            if ($types->get($code)->storage() !== null) {
+                self::assertArrayHasKey('default_' . $types->get($code)->storage(), $types->emptyValues());
+            } else {
+                foreach (['required', 'localized', 'default_value'] as $name) {
+                    self::assertNotContains($name, $names);
+                }
+            }
         }
     }
 
@@ -50,9 +51,6 @@ final class FieldTypeRegistryTest extends DefinitionTestCase
         yield 'select' => ['select', 'yes', 'yes'];
     }
 
-    /**
-     * Vsechny typy projdou jedinym definicnim validatorem se spravnym storage
-     */
     #[DataProvider('defaults')]
     public function testEveryRegisteredTypeNormalizesItsDefault(string $code, string $default, string|int $expected): void
     {
@@ -65,9 +63,6 @@ final class FieldTypeRegistryTest extends DefinitionTestCase
         self::assertSame($expected, $definition['values']['default_' . $type->storage()]);
     }
 
-    /**
-     * Projekce zachova presnou decimal hodnotu i integer koncici nulami
-     */
     public function testEditorProjectionPreservesNumericMagnitude(): void
     {
         $registry = $this->types();
@@ -76,13 +71,10 @@ final class FieldTypeRegistryTest extends DefinitionTestCase
         self::assertSame(100, $registry->get('integer')->editorValues(['default_integer' => 100])['default_value']);
     }
 
-    /**
-     * Nepripusti tiche prepsani prvni definice pri kolizi kodu
-     */
     public function testDuplicateTypeCodeIsRejected(): void
     {
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Duplicate field type code: text');
-        new FieldTypeRegistry([new \Lemonade\Cms\ContentTypes\Field\Types\TextFieldType(), new \Lemonade\Cms\ContentTypes\Field\Types\TextFieldType()]);
+        new FieldTypeRegistry([new TextFieldType(), new TextFieldType()]);
     }
 }

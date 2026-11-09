@@ -12,19 +12,16 @@ use Lemonade\Admin\DataGrid\DataGridRegistry;
 use Lemonade\Admin\Editor\EditorRegistry;
 use Lemonade\Admin\Module\AdminModuleRegistry;
 use Lemonade\Admin\Page\ModulePageRegistry;
+use Lemonade\Admin\Presentation\AdminFileUsageRegistry;
+use Lemonade\Cms\ContentTypes\Field\FieldTypeRegistry;
+use Lemonade\Cms\ContentTypes\Models\DefinitionModel;
 use Lemonade\Cms\ContentTypes\Models\RecordModel;
 use Lemonade\Framework\Container\ContainerInterface;
 use Lemonade\Framework\Database\Config\DatabaseRuntimeConfig;
 use Lemonade\Framework\Database\DatabaseDriverInterface;
 
-/**
- * Pripojuje ulozene definice do existujicich Admin registru bez DDL a zapisu prav
- */
 final readonly class RecordRegistration
 {
-    /**
-     * Registruje databazove prispevky jen po instalaci schema
-     */
     public static function boot(ContainerInterface $container): void
     {
         if (!$container->has(DatabaseDriverInterface::class)) {
@@ -36,6 +33,12 @@ final readonly class RecordRegistration
         }
         foreach ($container->get(RecordModel::class)->modules() as $module) {
             $code = $module->code();
+            foreach ($container->get(DefinitionModel::class)->fields($module->id()) as $field) {
+                $usage = $container->get(FieldTypeRegistry::class)->mediaDefinition($code, $field);
+                if ($usage !== null) {
+                    $container->get(AdminFileUsageRegistry::class)->register($usage);
+                }
+            }
             $factory = RecordProviderFactory::class;
             $container->get(AdminModuleRegistry::class)->register($module);
             $container->get(PermissionCatalogRegistry::class)->register(...$module->permissionDefinitions());
@@ -45,14 +48,14 @@ final readonly class RecordRegistration
             $container->get(ModulePageRegistry::class)->registerIndex($code, $factory);
             $container->get(ModulePageRegistry::class)->registerEditor($code, $factory);
             $provider = new CmsContentAdminProvider(
-                $code,
-                'records',
-                dirname(__DIR__) . '/Resources/lang',
-                $factory,
-                $factory,
-                $factory,
-                $factory,
-                $factory,
+                moduleCode: $code,
+                translationGroup: 'records',
+                translationPath: dirname(__DIR__) . '/Resources/lang',
+                dataGridService: $factory,
+                pageService: $factory,
+                editorService: $factory,
+                lifecycleService: $factory,
+                contentDefinitionService: $factory,
             );
             $provider->registerActions($container->get(ModuleActionRegistry::class), $factory);
         }
