@@ -10,6 +10,7 @@ use Lemonade\Admin\Editor\AdminEditor\Layout\SectionBlock;
 use Lemonade\Admin\Module\AdminModuleRegistry;
 use Lemonade\Admin\Module\AdminModuleRouteResolver;
 use Lemonade\Admin\Navigation\AdminNavigationGroupRegistry;
+use Lemonade\Admin\Presentation\AdminFileUsageRegistry;
 use Lemonade\Admin\Routing\AdminModuleRouteRegistrar;
 use Lemonade\Cms\CmsPublicationState;
 use Lemonade\Cms\ContentTypes\Exception\DefinitionValidationException;
@@ -181,6 +182,56 @@ final class RecordValuesTest extends DefinitionTestCase
             self::assertSame($active, $field->inputAttributes()['data-lemonade-required-active']);
             self::assertSame($condition, $field->inputAttributes()['data-lemonade-required-when'] ?? null);
             self::assertSame('content-types.validation.required', $field->inputAttributes()['data-lemonade-required-message']);
+        }
+    }
+
+    /**
+     * Overi nezavisle zalozky a serverove usages ve vsech ctyrech stavech
+     *
+     * @return iterable<string,array{bool,bool}>
+     */
+    public static function mediaCombinations(): iterable
+    {
+        yield 'none' => [false, false];
+        yield 'gallery' => [true, false];
+        yield 'attachments' => [false, true];
+        yield 'both' => [true, true];
+    }
+
+    /**
+     * Vypnuta usage zmizi z editoru i serveroveho registru bez zmeny identity
+     */
+    #[DataProvider('mediaCombinations')]
+    public function testSystemMediaCombinations(bool $gallery, bool $attachments): void
+    {
+        $module = new RecordModule(1, 'Type', 'type', true, galleryEnabled: $gallery, attachmentsEnabled: $attachments);
+        $modules = new AdminModuleRegistry(new AdminNavigationGroupRegistry());
+        $modules->register($module);
+        $router = new Router();
+        (new AdminModuleRouteRegistrar($modules))->registerRoutes($router);
+        $definition = new RecordEditorDefinition(
+            $module,
+            $this->writer('text'),
+            $this->types(),
+            new UrlGenerator($router),
+            new AdminModuleRouteResolver($modules),
+        );
+        $editor = $definition->create(['id' => 12, 'translations' => []], 'cs', false);
+        $tabs = array_map(static fn($tab): string => $tab->id(), $editor->tabs());
+        self::assertSame(['content', 'seo', ...($gallery ? ['gallery'] : []), ...($attachments ? ['attachments'] : [])], $tabs);
+
+        $usages = new AdminFileUsageRegistry();
+        $usages->registerCapabilities($module->code(), $module->fileCapabilities());
+        foreach (['gallery' => $gallery, 'attachment' => $attachments] as $usage => $enabled) {
+            try {
+                $fileUsage = $usages->require($module->code(), $usage);
+                self::assertTrue($enabled);
+                self::assertSame($usage, $fileUsage->usage());
+                self::assertTrue($fileUsage->multiple());
+                self::assertTrue($fileUsage->sortable());
+            } catch (\OutOfBoundsException) {
+                self::assertFalse($enabled);
+            }
         }
     }
 

@@ -43,7 +43,12 @@ final readonly class ModuleManifest implements ModuleManifestInterface, ModuleMi
      */
     public function migrations(): array
     {
-        return [Migrations\CreateContentTypes::class, Migrations\CreateContentFieldDefinitions::class, Migrations\CreateContentRecords::class];
+        return [
+            Migrations\CreateContentTypes::class,
+            Migrations\CreateContentFieldDefinitions::class,
+            Migrations\CreateContentRecords::class,
+            Migrations\AddContentTypeSystemMedia::class,
+        ];
     }
 
     public function adminMetadata(): AdminModuleMetadata

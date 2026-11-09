@@ -13,8 +13,12 @@ use Lemonade\Admin\DataGrid\Query\DataGridQuery;
 use Lemonade\Admin\Event\DomainEvent;
 use Lemonade\Admin\Event\DomainEventDispatcher;
 use Lemonade\Admin\Event\TransactionalEventProcessor;
+use Lemonade\Admin\File\FileReadModel;
 use Lemonade\Admin\Identity\LocalUserDirectory;
 use Lemonade\Admin\Localization\LanguageRegistry;
+use Lemonade\Admin\Platform\Migrations\CreateCoreFiles;
+use Lemonade\Admin\Presentation\AdminFileUsageRegistry;
+use Lemonade\Admin\Presentation\Models\AdminFileModel;
 use Lemonade\Cms\Content\CmsContentInput;
 use Lemonade\Cms\Content\CmsContentLifecycle;
 use Lemonade\Cms\Content\CmsContentReadModel;
@@ -110,7 +114,7 @@ final class RecordLifecycleTest extends TestCase
         $database->statement("INSERT IGNORE INTO system_language (code,name,enabled,is_default,sort_order) VALUES ('cs','Czech',1,1,1), ('en','English',1,0,2), ('de','German',1,0,3)");
 
         $schema = new Schema(new SchemaCompiler(new MysqlSchemaGrammar(new MysqlSqlEscaper($escaper), $config)), $driver);
-        foreach ([new CreateContentTypes(), new CreateContentFieldDefinitions(), new CreateContentRecords()] as $migration) {
+        foreach ([new CreateCoreFiles(), new CreateContentTypes(), new CreateContentFieldDefinitions(), new CreateContentRecords(), new \Lemonade\Cms\ContentTypes\Migrations\AddContentTypeSystemMedia()] as $migration) {
             $migration->up($schema);
         }
         $definitions = new DefinitionModel($database);
@@ -241,6 +245,39 @@ final class RecordLifecycleTest extends TestCase
         self::assertSame($before, $values->editorValues($id, 'cs'));
         self::assertSame('Integration record', $this->row($database->table('cms_content_record_translation')->where('record_id', $id)->where('locale', 'cs')->first())['title']);
         self::assertSame($auditCount, $database->table('system_audit_log')->countAllResults());
+        $files = new AdminFileModel($driver, new FileReadModel($driver));
+        $galleryIds = [
+            $files->createIdentity($module->code(), $id, 'gallery', 'image'),
+            $files->createIdentity($module->code(), $id, 'gallery', 'image'),
+        ];
+        $attachmentIds = [
+            $files->createFile($module->code(), $id, 'attachment', 'one.pdf', 'pdf', 'application/pdf', 10, 'test/one.pdf'),
+            $files->createFile($module->code(), $id, 'attachment', 'two.pdf', 'pdf', 'application/pdf', 20, 'test/two.pdf'),
+        ];
+        $files->reorder($module->code(), $id, 'attachment', array_reverse($attachmentIds));
+        self::assertSame(array_reverse($attachmentIds), array_column($files->listForEntity($module->code(), $id, 'attachment'), 'id'));
+        foreach ([[false, false], [true, false], [false, true], [true, true], [false, false], [true, true]] as $position => [$galleryEnabled, $attachmentsEnabled]) {
+            $definitions->updateType($typeId, [
+                'gallery_enabled' => (int) $galleryEnabled,
+                'attachments_enabled' => (int) $attachmentsEnabled,
+            ], $position + 1);
+            $currentModule = (new RecordModel($database, $types))->modules()[0];
+            $usages = new AdminFileUsageRegistry();
+            $usages->registerCapabilities($currentModule->code(), $currentModule->fileCapabilities());
+            foreach (['gallery' => $galleryEnabled, 'attachment' => $attachmentsEnabled] as $usage => $allowed) {
+                try {
+                    $usages->require($currentModule->code(), $usage);
+                    self::assertTrue($allowed);
+                } catch (\OutOfBoundsException) {
+                    self::assertFalse($allowed);
+                }
+            }
+            self::assertSame($galleryIds, array_column($files->listForEntity($module->code(), $id, 'gallery'), 'id'));
+            self::assertSame(array_reverse($attachmentIds), array_column($files->listForEntity($module->code(), $id, 'attachment'), 'id'));
+        }
+        $files->remove($attachmentIds[0]);
+        self::assertSame([$attachmentIds[1]], array_column($files->listForEntity($module->code(), $id, 'attachment'), 'id'));
+        self::assertSame($galleryIds, array_column($files->listForEntity($module->code(), $id, 'gallery'), 'id'));
         $definitions->updateType($typeId, ['enabled' => 0], 1);
         try {
             $lifecycle->createDraft(7, 'cs');

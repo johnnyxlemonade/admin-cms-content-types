@@ -24,6 +24,7 @@ use Lemonade\Admin\Module\AdminModuleRouteResolver;
 use Lemonade\Admin\Module\Contract\ModuleProviderFactoryInterface;
 use Lemonade\Admin\Page\Contract\ModuleEditorPageProviderInterface;
 use Lemonade\Admin\Page\Contract\ModuleIndexPageProviderInterface;
+use Lemonade\Admin\Presentation\AdminFileUploadComponent;
 use Lemonade\Cms\Content\CmsContentLifecycle;
 use Lemonade\Cms\Content\CmsContentReadModel;
 use Lemonade\Cms\Content\CmsDomainMapping;
@@ -138,6 +139,7 @@ final readonly class RecordProviderFactory implements ModuleProviderFactoryInter
                     $container->get(AdminModuleRouteResolver::class),
                 ),
                 $container->get(LocalUserDirectory::class),
+                $container->get(AdminFileUploadComponent::class),
             );
         }
         throw new InvalidArgumentException('Unsupported content runtime capability.');

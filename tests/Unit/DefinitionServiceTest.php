@@ -66,6 +66,28 @@ final class DefinitionServiceTest extends DefinitionTestCase
         self::assertNotEmpty(array_filter($this->writes, static fn(array $write): bool => str_contains($write['sql'], 'INSERT INTO cms_content_field ')));
     }
 
+    /**
+     * Vypnuti medii meni pouze definici typu a nikdy nemaze soubory
+     */
+    public function testMediaSwitchesAreSavedWithoutDeletingFiles(): void
+    {
+        $input = $this->input(true);
+        $input['gallery_enabled'] = '0';
+        $input['attachments_enabled'] = '1';
+        $this->service(true, true)->save(7, $input);
+        $typeWrites = array_values(array_filter(
+            $this->writes,
+            static fn(array $write): bool => str_starts_with($write['sql'], 'UPDATE cms_content_type SET'),
+        ));
+        self::assertCount(1, $typeWrites);
+        self::assertStringContainsString('gallery_enabled = ?', $typeWrites[0]['sql']);
+        self::assertStringContainsString('attachments_enabled = ?', $typeWrites[0]['sql']);
+        self::assertSame([], array_filter(
+            $this->writes,
+            static fn(array $write): bool => str_contains($write['sql'], 'system_file') || str_starts_with($write['sql'], 'DELETE'),
+        ));
+    }
+
     public function testUpdateKeepsIdentitiesAndAllowsLabelsHelpAndOrder(): void
     {
         $service = $this->service(true, true);

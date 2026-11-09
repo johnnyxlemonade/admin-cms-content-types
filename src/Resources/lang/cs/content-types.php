@@ -49,6 +49,7 @@ return [
     ],
     'editor' => [
         'title' => 'Definice obsahového typu',
+        'system_features' => 'Systémové funkce',
         'code_help' => 'Stálý identifikátor pro propojení dat, například misto_prace. Navrhne se z názvu; používá malá písmena bez diakritiky, čísla a podtržítka, začíná písmenem. Po uložení se nemění.',
         'no_default' => 'Bez výchozí hodnoty',
         'yes' => 'Ano',
@@ -61,6 +62,8 @@ return [
         'code' => 'Technický klíč',
         'description' => 'Popis',
         'enabled' => 'Aktivní',
+        'gallery_enabled' => 'Galerie',
+        'attachments_enabled' => 'Přílohy',
         'required' => 'Povinné pole',
         'localized' => 'Překládat hodnotu',
         'help' => 'Nápověda',

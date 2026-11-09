@@ -72,6 +72,15 @@ final readonly class ContentTypesEditorDefinition
                     new FieldColumn(Field::toggle('enabled', labelKey: 'content-types.fields.enabled')->help('', 'content-types.help.enabled'), md: 3, xl: 1),
                 ]),
             ]))
+            ->block(new SectionBlock(
+                id: 'system-features',
+                blocks: [new FieldGroupBlock([
+                    new FieldColumn(Field::toggle('gallery_enabled', labelKey: 'content-types.fields.gallery_enabled'), md: 6),
+                    new FieldColumn(Field::toggle('attachments_enabled', labelKey: 'content-types.fields.attachments_enabled'), md: 6),
+                ])],
+                title: '',
+                titleKey: 'content-types.editor.system_features',
+            ))
             ->block(new CustomViewBlock('content-types::builder', [
                 'adminEditorFields' => $this->fields,
                 'inspectors' => $this->types->inspectors(),

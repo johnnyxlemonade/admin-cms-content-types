@@ -49,6 +49,7 @@ return [
     ],
     'editor' => [
         'title' => 'Content type definition',
+        'system_features' => 'System features',
         'code_help' => 'A stable identifier used to link data, for example workplace. Suggested from the name; uses lowercase ASCII letters, digits and underscores, starting with a letter. Cannot be changed after saving.',
         'no_default' => 'No default value',
         'yes' => 'Yes',
@@ -61,6 +62,8 @@ return [
         'code' => 'Technical key',
         'description' => 'Description',
         'enabled' => 'Active',
+        'gallery_enabled' => 'Gallery',
+        'attachments_enabled' => 'Attachments',
         'required' => 'Required field',
         'localized' => 'Translate value',
         'help' => 'Help text',

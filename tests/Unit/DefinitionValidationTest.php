@@ -12,6 +12,25 @@ use PHPUnit\Framework\Attributes\DataProvider;
  */
 final class DefinitionValidationTest extends DefinitionTestCase
 {
+    /**
+     * Normalizuje nezavisle prepinace a chybejici vstupy na vypnuto
+     */
+    public function testSystemMediaDefaultsAndIndependentValues(): void
+    {
+        $base = ['name' => 'Type', 'description' => 'Description'];
+        foreach ([[0, 0], [1, 0], [0, 1], [1, 1]] as [$gallery, $attachments]) {
+            $values = $this->validation()->type($base + [
+                'gallery_enabled' => (string) $gallery,
+                'attachments_enabled' => (string) $attachments,
+            ]);
+            self::assertSame($gallery, $values['gallery_enabled']);
+            self::assertSame($attachments, $values['attachments_enabled']);
+        }
+        $defaults = $this->validation()->type($base);
+        self::assertSame(0, $defaults['gallery_enabled']);
+        self::assertSame(0, $defaults['attachments_enabled']);
+    }
+
     public function testCodeIsSuggestedFromCzechName(): void
     {
         self::assertSame(['name' => 'Nabídky práce', 'code' => 'nabidky_prace'], $this->validation()->identity(['name' => 'Nabídky práce']));

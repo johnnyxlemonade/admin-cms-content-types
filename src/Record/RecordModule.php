@@ -11,12 +11,14 @@ use Lemonade\Admin\Icon\AdminIcon;
 use Lemonade\Admin\Module\AdminModuleMetadata;
 use Lemonade\Admin\Module\AdminNavigationGroup;
 use Lemonade\Admin\Module\Contract\AdminModuleDefinitionInterface;
+use Lemonade\Admin\Module\Contract\AdminModuleFileCapabilitiesInterface;
+use Lemonade\Admin\Presentation\AdminFileCapabilities;
 use Lemonade\Cms\Content\CmsContentDefinition;
 
 /**
  * Pripojuje ulozeny typ k existujicim Admin registrum bez dalsiho Composer modulu
  */
-final readonly class RecordModule implements AdminModuleDefinitionInterface
+final readonly class RecordModule implements AdminModuleDefinitionInterface, AdminModuleFileCapabilitiesInterface
 {
     /**
      * Nastavuje stabilni identitu a uzivatelsky nazev typu
@@ -27,7 +29,36 @@ final readonly class RecordModule implements AdminModuleDefinitionInterface
         private string $typeCode,
         private bool $enabled,
         private ?string $description = null,
+        private bool $galleryEnabled = false,
+        private bool $attachmentsEnabled = false,
     ) {}
+
+    /**
+     * Povoli pouze systemove media usages aktivni v definici typu
+     */
+    public function fileCapabilities(): AdminFileCapabilities
+    {
+        return new AdminFileCapabilities(
+            gallery: $this->galleryEnabled,
+            attachments: $this->attachmentsEnabled,
+        );
+    }
+
+    /**
+     * Urcuje dostupnost systemove galerie v editoru zaznamu
+     */
+    public function galleryEnabled(): bool
+    {
+        return $this->galleryEnabled;
+    }
+
+    /**
+     * Urcuje dostupnost systemovych priloh v editoru zaznamu
+     */
+    public function attachmentsEnabled(): bool
+    {
+        return $this->attachmentsEnabled;
+    }
 
     public function code(): string
     {

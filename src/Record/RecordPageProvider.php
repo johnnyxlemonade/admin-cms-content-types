@@ -19,6 +19,7 @@ use Lemonade\Admin\Module\AdminModuleRouteResolver;
 use Lemonade\Admin\Page\Contract\ModuleEditorPageProviderInterface;
 use Lemonade\Admin\Page\Contract\ModuleIndexPageProviderInterface;
 use Lemonade\Admin\Page\ModulePage;
+use Lemonade\Admin\Presentation\AdminFileUploadComponent;
 use Lemonade\Cms\CmsPublicationState;
 
 use Lemonade\Framework\Localization\TranslatorInterface;
@@ -42,6 +43,7 @@ final readonly class RecordPageProvider implements ModuleIndexPageProviderInterf
         private AdminModuleRouteResolver $routes,
         private RecordEditorDefinition $adminEditorDefinitions,
         private LocalUserDirectory $users,
+        private AdminFileUploadComponent $files,
     ) {}
 
     /**
@@ -161,6 +163,11 @@ final readonly class RecordPageProvider implements ModuleIndexPageProviderInterf
         $ownerId = $article['owner_id'] === null ? null : (int) $article['owner_id'];
         $canAssignOwner = $this->authorization->hasPermission($this->module->code() . '.assign_owner')
             && $this->authorization->canForOwner($this->module->code() . '.view', $this->module->code() . '.view_own', $ownerId);
+        $canEdit = $this->authorization->canForOwner(
+            $this->module->code() . '.edit',
+            $this->module->code() . '.edit_own',
+            $ownerId,
+        );
 
         return new ModulePage(
             view: 'admin::editor',
@@ -178,6 +185,12 @@ final readonly class RecordPageProvider implements ModuleIndexPageProviderInterf
                     ownerOptions: $canAssignOwner ? $this->ownerOptions() : [],
                     context: $context,
                     otherPublishedLocale: $otherPublishedLocale,
+                    galleryUpload: $this->module->galleryEnabled()
+                        ? $this->files->collection($this->module->code(), (int) $article['id'], 'gallery', 'admin.file_upload.gallery', 'admin.file_upload.gallery_help', editable: $canEdit)
+                        : null,
+                    attachmentUpload: $this->module->attachmentsEnabled()
+                        ? $this->files->collection($this->module->code(), (int) $article['id'], 'attachment', 'admin.file_upload.attachments', 'admin.file_upload.attachments_help', editable: $canEdit)
+                        : null,
                 ),
                 'adminEditorContext' => new AdminEditorRenderContext(
                     values: [

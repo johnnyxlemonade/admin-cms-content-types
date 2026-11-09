@@ -45,7 +45,12 @@ final readonly class DefinitionValidation
             ValidationSchema::create()->field('description')->required()->maxLength(10000)->end(),
         );
 
-        return $this->identity($input) + ['description' => $description, 'enabled' => $this->values->boolean($input, 'enabled')];
+        return $this->identity($input) + [
+            'description' => $description,
+            'enabled' => $this->values->boolean($input, 'enabled'),
+            'gallery_enabled' => $this->values->boolean($input, 'gallery_enabled'),
+            'attachments_enabled' => $this->values->boolean($input, 'attachments_enabled'),
+        ];
     }
 
     /**

@@ -27,6 +27,10 @@ The Admin UI supports CS/EN; user-entered names, help and Select labels remain
 unchanged when switching the UI language. Deactivating a type hides its navigation
 item and prevents new records while preserving existing data and permissions.
 Groups, repeaters, relations and custom media fields are not supported yet.
+Each content type can independently enable the shared CMS gallery and attachments.
+Both are off by default. Disabling either feature hides its editor tab and rejects
+its file operations without deleting existing files; enabling it again restores
+access to the same collection. Thumbnail and field-scoped media remain unsupported.
 Existing CMS modules are not migrated. The host application owns public frontend
 rendering and enforces publication visibility; this package generates no frontend.
 

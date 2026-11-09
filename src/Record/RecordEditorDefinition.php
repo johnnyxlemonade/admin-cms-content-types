@@ -13,6 +13,7 @@ use Lemonade\Admin\Editor\AdminEditor\Layout\AdminEditorSidebarDefinition;
 use Lemonade\Admin\Editor\AdminEditor\Layout\AdminEditorTab;
 use Lemonade\Admin\Editor\AdminEditor\Layout\CmsEditorHeader;
 use Lemonade\Admin\Editor\AdminEditor\Layout\CmsEditorSaveBar;
+use Lemonade\Admin\Editor\AdminEditor\Layout\CmsMediaSection;
 use Lemonade\Admin\Editor\AdminEditor\Layout\CmsOwnershipSection;
 use Lemonade\Admin\Editor\AdminEditor\Layout\CmsPublicationSection;
 use Lemonade\Admin\Editor\AdminEditor\Layout\FieldColumn;
@@ -20,6 +21,7 @@ use Lemonade\Admin\Editor\AdminEditor\Layout\FieldGroupBlock;
 use Lemonade\Admin\Editor\AdminEditor\Layout\SectionBlock;
 use Lemonade\Admin\Editor\AdminEditor\Layout\SeoSection;
 use Lemonade\Admin\Module\AdminModuleRouteResolver;
+use Lemonade\Admin\Presentation\AdminFileUploadCollection;
 use Lemonade\Cms\CmsPublicationState;
 use Lemonade\Cms\ContentTypes\Field\FieldTypeRegistry;
 use Lemonade\Framework\Routing\UrlGenerator;
@@ -46,8 +48,17 @@ final readonly class RecordEditorDefinition
      * @param array<string,mixed> $article
      * @param array<int,string> $ownerOptions
      */
-    public function create(array $article, string $contentLocale, bool $canPublish, bool $canAssignOwner = false, array $ownerOptions = [], ?AdminEditorHeaderContextDefinition $context = null, bool $otherPublishedLocale = false): AdminEditorDefinition
-    {
+    public function create(
+        array $article,
+        string $contentLocale,
+        bool $canPublish,
+        bool $canAssignOwner = false,
+        array $ownerOptions = [],
+        ?AdminEditorHeaderContextDefinition $context = null,
+        bool $otherPublishedLocale = false,
+        ?AdminFileUploadCollection $galleryUpload = null,
+        ?AdminFileUploadCollection $attachmentUpload = null,
+    ): AdminEditorDefinition {
         $segment = $this->module->segment();
         $params = ['module' => $segment, 'id' => (int) $article['id'], 'locale' => $contentLocale];
         $builder = AdminEditorBuilder::create($this->module->code())
@@ -94,6 +105,12 @@ final readonly class RecordEditorDefinition
         }
         $builder->tab(new AdminEditorTab('content', '', $blocks, labelKey: 'records.editor.tabs.content', default: true))
             ->tab(SeoSection::tab(pathPrefix: '/', autoGenerateUrl: trim((string) ($article['translations'][0]['canonical_path'] ?? '')) === ''));
+        if ($this->module->galleryEnabled()) {
+            $builder->tab(CmsMediaSection::gallery('records', $galleryUpload));
+        }
+        if ($this->module->attachmentsEnabled()) {
+            $builder->tab(CmsMediaSection::attachments('records', $attachmentUpload));
+        }
         $sidebar = [];
         $publication = CmsPublicationSection::create('records', $canPublish);
         if ($publication !== null) {
