@@ -48,6 +48,7 @@ final readonly class ModuleManifest implements ModuleManifestInterface, ModuleMi
             Migrations\CreateContentFieldDefinitions::class,
             Migrations\CreateContentRecords::class,
             Migrations\AddContentTypeSystemMedia::class,
+            Migrations\AddContentTypeThumbnail::class,
         ];
     }
 

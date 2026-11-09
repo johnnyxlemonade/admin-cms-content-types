@@ -31,8 +31,11 @@ $icons = ['text' => 'type', 'textarea' => 'text-left', 'richtext' => 'paragraph'
     <div class="lm-field-builder-columns">
         <section class="card lm-card lm-field-builder-palette" aria-labelledby="builder-palette-title">
             <header class="lm-field-builder-heading">
-                <h2 id="builder-palette-title" data-lemonade-i18n="content-types.builder.fields"><?= e($helpers->lang('content-types.builder.fields')) ?></h2>
-                <p data-lemonade-i18n="content-types.builder.palette_help"><?= e($helpers->lang('content-types.builder.palette_help')) ?></p>
+                <span class="lm-field-builder-heading-icon" aria-hidden="true"><i class="bi bi-plus-square"></i></span>
+                <span class="lm-field-builder-heading-copy">
+                    <h2 id="builder-palette-title" data-lemonade-i18n="content-types.builder.fields"><?= e($helpers->lang('content-types.builder.fields')) ?></h2>
+                    <p data-lemonade-i18n="content-types.builder.palette_help"><?= e($helpers->lang('content-types.builder.palette_help')) ?></p>
+                </span>
             </header>
             <div class="lm-form-editor-available-list">
                 <?php foreach ($kinds as $kind => $label): ?>
@@ -49,16 +52,22 @@ $icons = ['text' => 'type', 'textarea' => 'text-left', 'richtext' => 'paragraph'
         </section>
         <section class="card lm-card lm-field-builder-canvas" aria-labelledby="builder-layout-title">
             <header class="lm-field-builder-heading">
-                <h2 id="builder-layout-title" data-lemonade-i18n="content-types.builder.layout"><?= e($helpers->lang('content-types.builder.layout')) ?></h2>
-                <p data-lemonade-i18n="content-types.builder.layout_help"><?= e($helpers->lang('content-types.builder.layout_help')) ?></p>
+                <span class="lm-field-builder-heading-icon" aria-hidden="true"><i class="bi bi-grid-3x2-gap"></i></span>
+                <span class="lm-field-builder-heading-copy">
+                    <h2 id="builder-layout-title" data-lemonade-i18n="content-types.builder.layout"><?= e($helpers->lang('content-types.builder.layout')) ?></h2>
+                    <p data-lemonade-i18n="content-types.builder.layout_help"><?= e($helpers->lang('content-types.builder.layout_help')) ?></p>
+                </span>
             </header>
             <p class="lm-form-help" data-builder-status role="status" aria-live="polite"></p>
             <div class="lm-form-layout-rows" data-builder-layout></div>
         </section>
         <aside class="card lm-card lm-field-builder-settings" aria-labelledby="builder-settings-title">
             <header class="lm-field-builder-heading">
-                <h2 id="builder-settings-title" data-lemonade-i18n="content-types.builder.inspector"><?= e($helpers->lang('content-types.builder.inspector')) ?></h2>
-                <p data-lemonade-i18n="content-types.builder.inspector_help"><?= e($helpers->lang('content-types.builder.inspector_help')) ?></p>
+                <span class="lm-field-builder-heading-icon" aria-hidden="true"><i class="bi bi-sliders"></i></span>
+                <span class="lm-field-builder-heading-copy">
+                    <h2 id="builder-settings-title" data-lemonade-i18n="content-types.builder.inspector"><?= e($helpers->lang('content-types.builder.inspector')) ?></h2>
+                    <p data-lemonade-i18n="content-types.builder.inspector_help"><?= e($helpers->lang('content-types.builder.inspector_help')) ?></p>
+                </span>
             </header>
             <div data-builder-inspector></div>
         </aside>

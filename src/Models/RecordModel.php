@@ -37,6 +37,7 @@ final readonly class RecordModel
             $row['description'] === null ? null : (string) $row['description'],
             (int) ($row['gallery_enabled'] ?? 0) === 1,
             (int) ($row['attachments_enabled'] ?? 0) === 1,
+            (int) ($row['thumbnail_enabled'] ?? 0) === 1,
         ), $this->database->table('cms_content_type')->orderBy('id')->getArray());
     }
 

@@ -15,6 +15,7 @@ use Lemonade\Admin\Editor\AdminEditor\Layout\FieldColumn;
 use Lemonade\Admin\Editor\AdminEditor\Layout\FieldGroupBlock;
 use Lemonade\Admin\Editor\AdminEditor\Layout\SectionBlock;
 use Lemonade\Admin\Editor\AdminEditor\Rendering\AdminEditorFieldRenderer;
+use Lemonade\Admin\Icon\AdminIcon;
 use Lemonade\Cms\ContentTypes\Field\FieldTypeRegistry;
 use Lemonade\Framework\Routing\UrlGenerator;
 
@@ -52,7 +53,7 @@ final readonly class ContentTypesEditorDefinition
             novalidate: true,
             navigateToEditAfterCreate: $id === null,
         );
-        $code = Field::text('code', labelKey: 'content-types.fields.code')->help('', 'content-types.editor.code_help');
+        $code = Field::text('code', labelKey: 'content-types.fields.code')->help('', 'content-types.editor.type_code_help');
         if ($id !== null) {
             $code = $code->readonly();
         }
@@ -62,24 +63,51 @@ final readonly class ContentTypesEditorDefinition
             ->header(new AdminEditorHeaderDefinition('', titleKey: 'content-types.editor.title', breadcrumbs: [
                 ['label' => '', 'labelKey' => 'content-types.module.name', 'href' => $this->urls->route('admin.cms.module.index', ['module' => 'content-types'])],
             ]))
-            ->block(new SectionBlock('type', [
-                Field::hidden('revision'),
-                Field::hidden('definition'),
-                new FieldGroupBlock([
-                    new FieldColumn(Field::text('name', labelKey: 'content-types.fields.name')->help('', 'content-types.help.type_name')->required()->attributes(['maxlength' => '180']), md: 6, xl: 3),
-                    new FieldColumn($code, md: 6, xl: 3),
-                    new FieldColumn(Field::text('description', labelKey: 'content-types.fields.description')->help('', 'content-types.help.description')->required()->attributes(['maxlength' => '10000']), md: 9, xl: 5),
-                    new FieldColumn(Field::toggle('enabled', labelKey: 'content-types.fields.enabled')->help('', 'content-types.help.enabled'), md: 3, xl: 1),
-                ]),
-            ]))
+            ->block(new SectionBlock(
+                id: 'type',
+                blocks: [
+                    Field::hidden('revision'),
+                    Field::hidden('definition'),
+                    new CustomViewBlock('content-types::editor-navigation'),
+                    new CustomViewBlock('content-types::editor-basic-intro'),
+                    new FieldGroupBlock([
+                        new FieldColumn(Field::text('name', labelKey: 'content-types.fields.name')->help('', 'content-types.help.type_name')->required()->attributes(['maxlength' => '180']), md: 6, xl: 3),
+                        new FieldColumn($code, md: 6, xl: 3),
+                        new FieldColumn(Field::text('description', labelKey: 'content-types.fields.description')->help('', 'content-types.help.description')->required()->attributes(['maxlength' => '10000']), md: 9, xl: 4),
+                        new FieldColumn(Field::toggle('enabled', labelKey: 'content-types.fields.enabled')->help('', 'content-types.help.enabled'), md: 3, xl: 2),
+                    ]),
+                ],
+                titleKey: 'content-types.editor.basic_information_title',
+                descriptionKey: 'content-types.editor.basic_information_help',
+            ))
             ->block(new SectionBlock(
                 id: 'system-features',
-                blocks: [new FieldGroupBlock([
-                    new FieldColumn(Field::toggle('gallery_enabled', labelKey: 'content-types.fields.gallery_enabled'), md: 6),
-                    new FieldColumn(Field::toggle('attachments_enabled', labelKey: 'content-types.fields.attachments_enabled'), md: 6),
-                ])],
+                blocks: [
+                    new CustomViewBlock('content-types::editor-features-intro'),
+                    new FieldGroupBlock([
+                        new FieldColumn(
+                            Field::toggle('thumbnail_enabled', labelKey: 'content-types.fields.thumbnail_enabled')->helpKey('content-types.help.thumbnail_enabled'),
+                            md: 6,
+                            xl: 4,
+                            cardIcon: AdminIcon::Image,
+                        ),
+                        new FieldColumn(
+                            Field::toggle('gallery_enabled', labelKey: 'content-types.fields.gallery_enabled')->helpKey('content-types.help.gallery_enabled'),
+                            md: 6,
+                            xl: 4,
+                            cardIcon: AdminIcon::Images,
+                        ),
+                        new FieldColumn(
+                            Field::toggle('attachments_enabled', labelKey: 'content-types.fields.attachments_enabled')->helpKey('content-types.help.attachments_enabled'),
+                            md: 6,
+                            xl: 4,
+                            cardIcon: AdminIcon::Paperclip,
+                        ),
+                    ]),
+                ],
                 title: '',
-                titleKey: 'content-types.editor.system_features',
+                titleKey: 'content-types.editor.system_features_title',
+                descriptionKey: 'content-types.editor.system_features_help',
             ))
             ->block(new CustomViewBlock('content-types::builder', [
                 'adminEditorFields' => $this->fields,

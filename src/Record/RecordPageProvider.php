@@ -191,6 +191,17 @@ final readonly class RecordPageProvider implements ModuleIndexPageProviderInterf
                     attachmentUpload: $this->module->attachmentsEnabled()
                         ? $this->files->collection($this->module->code(), (int) $article['id'], 'attachment', 'admin.file_upload.attachments', 'admin.file_upload.attachments_help', editable: $canEdit)
                         : null,
+                    thumbnailUpload: $this->module->thumbnailEnabled()
+                        ? $this->files->collection(
+                            module: $this->module->code(),
+                            entityId: (int) $article['id'],
+                            usage: 'thumbnail',
+                            labelKey: 'records.fields.thumbnail',
+                            helpKey: 'records.editor.thumbnail.help',
+                            editable: $canEdit,
+                            alt: (string) ($article['translations'][0]['title'] ?? ''),
+                        )
+                        : null,
                 ),
                 'adminEditorContext' => new AdminEditorRenderContext(
                     values: [

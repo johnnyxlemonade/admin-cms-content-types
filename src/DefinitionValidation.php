@@ -48,6 +48,7 @@ final readonly class DefinitionValidation
         return $this->identity($input) + [
             'description' => $description,
             'enabled' => $this->values->boolean($input, 'enabled'),
+            'thumbnail_enabled' => $this->values->boolean($input, 'thumbnail_enabled'),
             'gallery_enabled' => $this->values->boolean($input, 'gallery_enabled'),
             'attachments_enabled' => $this->values->boolean($input, 'attachments_enabled'),
         ];

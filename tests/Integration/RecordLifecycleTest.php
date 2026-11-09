@@ -58,12 +58,14 @@ use Lemonade\Framework\Database\Instrumentation\Internal\DatabaseInstrumentation
 use Lemonade\Framework\Database\Schema\Schema;
 use Lemonade\Framework\Database\Schema\SchemaCompiler;
 use Lemonade\Framework\Database\Sql\IdentifierProtector;
+use Lemonade\Framework\Image\Value\ImageFormat;
 use Lemonade\Framework\Localization\TranslatorInterface;
 use Lemonade\Framework\Routing\Router;
 use Lemonade\Framework\Support\Slug\Slugger;
 use Lemonade\Framework\Validation\FormValidation;
 use Lemonade\Framework\Validation\Rule\RuleRegistry;
 use Lemonade\Framework\Validation\ValidationRuleResolver;
+use Lemonade\Image\ImageOriginalMetadata;
 use Nyholm\Psr7\ServerRequest;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -114,12 +116,13 @@ final class RecordLifecycleTest extends TestCase
         $database->statement("INSERT IGNORE INTO system_language (code,name,enabled,is_default,sort_order) VALUES ('cs','Czech',1,1,1), ('en','English',1,0,2), ('de','German',1,0,3)");
 
         $schema = new Schema(new SchemaCompiler(new MysqlSchemaGrammar(new MysqlSqlEscaper($escaper), $config)), $driver);
-        foreach ([new CreateCoreFiles(), new CreateContentTypes(), new CreateContentFieldDefinitions(), new CreateContentRecords(), new \Lemonade\Cms\ContentTypes\Migrations\AddContentTypeSystemMedia()] as $migration) {
+        foreach ([new CreateCoreFiles(), new CreateContentTypes(), new CreateContentFieldDefinitions(), new CreateContentRecords(), new \Lemonade\Cms\ContentTypes\Migrations\AddContentTypeSystemMedia(), new \Lemonade\Cms\ContentTypes\Migrations\AddContentTypeThumbnail()] as $migration) {
             $migration->up($schema);
         }
         $definitions = new DefinitionModel($database);
         $typeId = $definitions->createType(['code' => 'integration', 'name' => 'Integration', 'enabled' => 1]);
         $secondType = $definitions->createType(['code' => 'other', 'name' => 'Other', 'enabled' => 1]);
+        self::assertSame(0, (int) $this->row($database->table('cms_content_type')->where('id', $typeId)->first())['thumbnail_enabled']);
         $rowId = $definitions->saveRow($typeId, null, 0);
         $ids = [];
         foreach ($types->codes() as $index => $kind) {
@@ -246,6 +249,11 @@ final class RecordLifecycleTest extends TestCase
         self::assertSame('Integration record', $this->row($database->table('cms_content_record_translation')->where('record_id', $id)->where('locale', 'cs')->first())['title']);
         self::assertSame($auditCount, $database->table('system_audit_log')->countAllResults());
         $files = new AdminFileModel($driver, new FileReadModel($driver));
+        $thumbnailId = $files->createIdentity($module->code(), $id, 'thumbnail', 'image');
+        $files->updateImageSource($thumbnailId, 'first-asset', 'first-version', new ImageOriginalMetadata('first.png', ImageFormat::Png, 10, 1, 1));
+        $files->updateImageSource($thumbnailId, 'second-asset', 'second-version', new ImageOriginalMetadata('second.png', ImageFormat::Png, 12, 2, 2));
+        self::assertSame([$thumbnailId], array_column($files->listForEntity($module->code(), $id, 'thumbnail'), 'id'));
+        self::assertSame('second-version', $files->listForEntity($module->code(), $id, 'thumbnail')[0]['source_version']);
         $galleryIds = [
             $files->createIdentity($module->code(), $id, 'gallery', 'image'),
             $files->createIdentity($module->code(), $id, 'gallery', 'image'),
@@ -256,15 +264,16 @@ final class RecordLifecycleTest extends TestCase
         ];
         $files->reorder($module->code(), $id, 'attachment', array_reverse($attachmentIds));
         self::assertSame(array_reverse($attachmentIds), array_column($files->listForEntity($module->code(), $id, 'attachment'), 'id'));
-        foreach ([[false, false], [true, false], [false, true], [true, true], [false, false], [true, true]] as $position => [$galleryEnabled, $attachmentsEnabled]) {
+        foreach ([[false, false, false], [true, false, false], [false, true, false], [false, false, true], [true, true, false], [true, false, true], [false, true, true], [true, true, true], [false, false, false], [true, true, true]] as $position => [$thumbnailEnabled, $galleryEnabled, $attachmentsEnabled]) {
             $definitions->updateType($typeId, [
+                'thumbnail_enabled' => (int) $thumbnailEnabled,
                 'gallery_enabled' => (int) $galleryEnabled,
                 'attachments_enabled' => (int) $attachmentsEnabled,
             ], $position + 1);
             $currentModule = (new RecordModel($database, $types))->modules()[0];
             $usages = new AdminFileUsageRegistry();
             $usages->registerCapabilities($currentModule->code(), $currentModule->fileCapabilities());
-            foreach (['gallery' => $galleryEnabled, 'attachment' => $attachmentsEnabled] as $usage => $allowed) {
+            foreach (['thumbnail' => $thumbnailEnabled, 'gallery' => $galleryEnabled, 'attachment' => $attachmentsEnabled] as $usage => $allowed) {
                 try {
                     $usages->require($currentModule->code(), $usage);
                     self::assertTrue($allowed);
@@ -272,10 +281,13 @@ final class RecordLifecycleTest extends TestCase
                     self::assertFalse($allowed);
                 }
             }
+            self::assertSame([$thumbnailId], array_column($files->listForEntity($module->code(), $id, 'thumbnail'), 'id'));
             self::assertSame($galleryIds, array_column($files->listForEntity($module->code(), $id, 'gallery'), 'id'));
             self::assertSame(array_reverse($attachmentIds), array_column($files->listForEntity($module->code(), $id, 'attachment'), 'id'));
         }
         $files->remove($attachmentIds[0]);
+        $files->remove($thumbnailId);
+        self::assertSame([], $files->listForEntity($module->code(), $id, 'thumbnail'));
         self::assertSame([$attachmentIds[1]], array_column($files->listForEntity($module->code(), $id, 'attachment'), 'id'));
         self::assertSame($galleryIds, array_column($files->listForEntity($module->code(), $id, 'gallery'), 'id'));
         $definitions->updateType($typeId, ['enabled' => 0], 1);

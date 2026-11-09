@@ -22,6 +22,7 @@ use Lemonade\Admin\Presentation\AdminFileUsageRegistry;
 use Lemonade\Cms\ContentTypes\ContentTypesModulePageProvider;
 use Lemonade\Cms\ContentTypes\DataGrid\ContentTypesDataGrid;
 use Lemonade\Cms\ContentTypes\Migrations\AddContentTypeSystemMedia;
+use Lemonade\Cms\ContentTypes\Migrations\AddContentTypeThumbnail;
 use Lemonade\Cms\ContentTypes\Migrations\CreateContentFieldDefinitions;
 use Lemonade\Cms\ContentTypes\Migrations\CreateContentTypes;
 use Lemonade\Cms\ContentTypes\ModuleManifest;
@@ -100,7 +101,7 @@ final class ModuleRegistrationTest extends TestCase
             self::assertSame(ContentTypesDataGrid::class, $grids->providerServiceId(ModuleManifest::CODE));
             self::assertSame(ContentTypesModulePageProvider::class, $pages->indexProviderServiceId(ModuleManifest::CODE));
             self::assertTrue($editors->has(ModuleManifest::CODE));
-            self::assertSame([CreateContentTypes::identifier(), CreateContentFieldDefinitions::identifier(), \Lemonade\Cms\ContentTypes\Migrations\CreateContentRecords::identifier(), AddContentTypeSystemMedia::identifier()], $migrations->identifiers());
+            self::assertSame([CreateContentTypes::identifier(), CreateContentFieldDefinitions::identifier(), \Lemonade\Cms\ContentTypes\Migrations\CreateContentRecords::identifier(), AddContentTypeSystemMedia::identifier(), AddContentTypeThumbnail::identifier()], $migrations->identifiers());
             self::assertTrue($container->get(ClientTranslationGroupRegistry::class)->has('content-types'));
             $audit = $container->get(AuditEventPresentationRegistry::class);
             self::assertSame('content-types.module.name', $audit->modulePresentation(ModuleManifest::CODE)?->nameKey());

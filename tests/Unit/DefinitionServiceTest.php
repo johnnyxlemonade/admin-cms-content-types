@@ -72,6 +72,7 @@ final class DefinitionServiceTest extends DefinitionTestCase
     public function testMediaSwitchesAreSavedWithoutDeletingFiles(): void
     {
         $input = $this->input(true);
+        $input['thumbnail_enabled'] = '1';
         $input['gallery_enabled'] = '0';
         $input['attachments_enabled'] = '1';
         $this->service(true, true)->save(7, $input);
@@ -80,6 +81,7 @@ final class DefinitionServiceTest extends DefinitionTestCase
             static fn(array $write): bool => str_starts_with($write['sql'], 'UPDATE cms_content_type SET'),
         ));
         self::assertCount(1, $typeWrites);
+        self::assertStringContainsString('thumbnail_enabled = ?', $typeWrites[0]['sql']);
         self::assertStringContainsString('gallery_enabled = ?', $typeWrites[0]['sql']);
         self::assertStringContainsString('attachments_enabled = ?', $typeWrites[0]['sql']);
         self::assertSame([], array_filter(

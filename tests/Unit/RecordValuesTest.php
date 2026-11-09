@@ -10,6 +10,9 @@ use Lemonade\Admin\Editor\AdminEditor\Layout\SectionBlock;
 use Lemonade\Admin\Module\AdminModuleRegistry;
 use Lemonade\Admin\Module\AdminModuleRouteResolver;
 use Lemonade\Admin\Navigation\AdminNavigationGroupRegistry;
+use Lemonade\Admin\Presentation\AdminFilePresentation;
+use Lemonade\Admin\Presentation\AdminFileUploadCollection;
+use Lemonade\Admin\Presentation\AdminFileUploadProfilePresentation;
 use Lemonade\Admin\Presentation\AdminFileUsageRegistry;
 use Lemonade\Admin\Routing\AdminModuleRouteRegistrar;
 use Lemonade\Cms\CmsPublicationState;
@@ -186,25 +189,64 @@ final class RecordValuesTest extends DefinitionTestCase
     }
 
     /**
-     * Overi nezavisle zalozky a serverove usages ve vsech ctyrech stavech
+     * Novy draft i existujici zaznam odkazuji na seznam sveho typu
+     */
+    public function testEditorBreadcrumbUsesDynamicTypeName(): void
+    {
+        $modules = new AdminModuleRegistry(new AdminNavigationGroupRegistry());
+        $jobOffers = new RecordModule(1, 'Nabídky práce', 'job_offer', true);
+        $events = new RecordModule(2, 'Události', 'events', true);
+        $modules->register($jobOffers);
+        $modules->register($events);
+        $router = new Router();
+        (new AdminModuleRouteRegistrar($modules))->registerRoutes($router);
+
+        foreach ([$jobOffers, $events] as $module) {
+            $definition = new RecordEditorDefinition(
+                $module,
+                $this->writer('text'),
+                $this->types(),
+                new UrlGenerator($router),
+                new AdminModuleRouteResolver($modules),
+            );
+            foreach ([['id' => 12, 'translations' => []], ['id' => 13, 'translations' => [['title' => 'Existing']]]] as $article) {
+                $editor = $definition->create($article, 'cs', false);
+                $header = $editor->header();
+                self::assertNotNull($header);
+                self::assertSame('records.editor.title', $header->titleKey());
+                $breadcrumbs = $header->breadcrumbs();
+                self::assertSame($module->name(), $breadcrumbs[0]['label']);
+                self::assertArrayNotHasKey('labelKey', $breadcrumbs[0]);
+                self::assertSame('/content/' . $module->segment(), $breadcrumbs[0]['href'] ?? null);
+                self::assertSame('records.editor.title', $breadcrumbs[1]['labelKey'] ?? null);
+            }
+        }
+    }
+
+    /**
+     * Overi nezavisle systemove komponenty a usages ve vsech osmi stavech
      *
-     * @return iterable<string,array{bool,bool}>
+     * @return iterable<string,array{bool,bool,bool}>
      */
     public static function mediaCombinations(): iterable
     {
-        yield 'none' => [false, false];
-        yield 'gallery' => [true, false];
-        yield 'attachments' => [false, true];
-        yield 'both' => [true, true];
+        yield 'none' => [false, false, false];
+        yield 'thumbnail' => [true, false, false];
+        yield 'gallery' => [false, true, false];
+        yield 'attachments' => [false, false, true];
+        yield 'thumbnail and gallery' => [true, true, false];
+        yield 'thumbnail and attachments' => [true, false, true];
+        yield 'gallery and attachments' => [false, true, true];
+        yield 'all' => [true, true, true];
     }
 
     /**
      * Vypnuta usage zmizi z editoru i serveroveho registru bez zmeny identity
      */
     #[DataProvider('mediaCombinations')]
-    public function testSystemMediaCombinations(bool $gallery, bool $attachments): void
+    public function testSystemMediaCombinations(bool $thumbnail, bool $gallery, bool $attachments): void
     {
-        $module = new RecordModule(1, 'Type', 'type', true, galleryEnabled: $gallery, attachmentsEnabled: $attachments);
+        $module = new RecordModule(1, 'Type', 'type', true, galleryEnabled: $gallery, attachmentsEnabled: $attachments, thumbnailEnabled: $thumbnail);
         $modules = new AdminModuleRegistry(new AdminNavigationGroupRegistry());
         $modules->register($module);
         $router = new Router();
@@ -216,19 +258,49 @@ final class RecordValuesTest extends DefinitionTestCase
             new UrlGenerator($router),
             new AdminModuleRouteResolver($modules),
         );
-        $editor = $definition->create(['id' => 12, 'translations' => []], 'cs', false);
+        $thumbnailUpload = new AdminFileUploadCollection(
+            moduleCode: $module->code(),
+            entityId: 12,
+            usage: 'thumbnail',
+            files: [],
+            startUrl: '/start',
+            appendUrlTemplate: '/append',
+            completeUrlTemplate: '/complete',
+            abortUrlTemplate: '/abort',
+            removeUrlTemplate: '/remove',
+            reorderUrl: '/reorder',
+            renameModalUrlTemplate: '/rename',
+            labelKey: 'records.fields.thumbnail',
+            helpKey: 'records.editor.thumbnail.help',
+            kind: 'image',
+            multiple: false,
+            sortable: false,
+            editable: true,
+            profile: new AdminFileUploadProfilePresentation('image/*', ['png'], 1000, '1 KB'),
+            presentation: AdminFilePresentation::Landscape,
+            fallback: null,
+            alt: '',
+        );
+        $editor = $definition->create(['id' => 12, 'translations' => []], 'cs', false, thumbnailUpload: $thumbnailUpload);
         $tabs = array_map(static fn($tab): string => $tab->id(), $editor->tabs());
         self::assertSame(['content', 'seo', ...($gallery ? ['gallery'] : []), ...($attachments ? ['attachments'] : [])], $tabs);
+        $sidebarIds = array_map(static fn(SectionBlock $panel): string => $panel->id(), $editor->sidebar()?->panels() ?? []);
+        self::assertSame($thumbnail, in_array('thumbnail', $sidebarIds, true));
 
         $usages = new AdminFileUsageRegistry();
         $usages->registerCapabilities($module->code(), $module->fileCapabilities());
-        foreach (['gallery' => $gallery, 'attachment' => $attachments] as $usage => $enabled) {
+        foreach (['thumbnail' => $thumbnail, 'gallery' => $gallery, 'attachment' => $attachments] as $usage => $enabled) {
             try {
                 $fileUsage = $usages->require($module->code(), $usage);
                 self::assertTrue($enabled);
                 self::assertSame($usage, $fileUsage->usage());
-                self::assertTrue($fileUsage->multiple());
-                self::assertTrue($fileUsage->sortable());
+                self::assertSame($usage !== 'thumbnail', $fileUsage->multiple());
+                self::assertSame($usage !== 'thumbnail', $fileUsage->sortable());
+                if ($usage === 'thumbnail') {
+                    self::assertSame('image', $fileUsage->kind());
+                    self::assertSame('admin-image', $fileUsage->profile());
+                    self::assertSame(AdminFilePresentation::Landscape, $fileUsage->presentation());
+                }
             } catch (\OutOfBoundsException) {
                 self::assertFalse($enabled);
             }

@@ -13,6 +13,7 @@ use Lemonade\Admin\Module\AdminNavigationGroup;
 use Lemonade\Admin\Module\Contract\AdminModuleDefinitionInterface;
 use Lemonade\Admin\Module\Contract\AdminModuleFileCapabilitiesInterface;
 use Lemonade\Admin\Presentation\AdminFileCapabilities;
+use Lemonade\Admin\Presentation\AdminFilePresentation;
 use Lemonade\Cms\Content\CmsContentDefinition;
 
 /**
@@ -31,6 +32,7 @@ final readonly class RecordModule implements AdminModuleDefinitionInterface, Adm
         private ?string $description = null,
         private bool $galleryEnabled = false,
         private bool $attachmentsEnabled = false,
+        private bool $thumbnailEnabled = false,
     ) {}
 
     /**
@@ -39,9 +41,18 @@ final readonly class RecordModule implements AdminModuleDefinitionInterface, Adm
     public function fileCapabilities(): AdminFileCapabilities
     {
         return new AdminFileCapabilities(
+            thumbnail: $this->thumbnailEnabled ? AdminFilePresentation::Landscape : null,
             gallery: $this->galleryEnabled,
             attachments: $this->attachmentsEnabled,
         );
+    }
+
+    /**
+     * Urcuje dostupnost systemoveho hlavniho obrazku v editoru zaznamu
+     */
+    public function thumbnailEnabled(): bool
+    {
+        return $this->thumbnailEnabled;
     }
 
     /**

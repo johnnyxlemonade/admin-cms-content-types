@@ -18,15 +18,18 @@ final class DefinitionValidationTest extends DefinitionTestCase
     public function testSystemMediaDefaultsAndIndependentValues(): void
     {
         $base = ['name' => 'Type', 'description' => 'Description'];
-        foreach ([[0, 0], [1, 0], [0, 1], [1, 1]] as [$gallery, $attachments]) {
+        foreach ([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 0], [1, 0, 1], [0, 1, 1], [1, 1, 1]] as [$thumbnail, $gallery, $attachments]) {
             $values = $this->validation()->type($base + [
+                'thumbnail_enabled' => (string) $thumbnail,
                 'gallery_enabled' => (string) $gallery,
                 'attachments_enabled' => (string) $attachments,
             ]);
+            self::assertSame($thumbnail, $values['thumbnail_enabled']);
             self::assertSame($gallery, $values['gallery_enabled']);
             self::assertSame($attachments, $values['attachments_enabled']);
         }
         $defaults = $this->validation()->type($base);
+        self::assertSame(0, $defaults['thumbnail_enabled']);
         self::assertSame(0, $defaults['gallery_enabled']);
         self::assertSame(0, $defaults['attachments_enabled']);
     }

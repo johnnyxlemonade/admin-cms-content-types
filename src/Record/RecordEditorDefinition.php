@@ -58,6 +58,7 @@ final readonly class RecordEditorDefinition
         bool $otherPublishedLocale = false,
         ?AdminFileUploadCollection $galleryUpload = null,
         ?AdminFileUploadCollection $attachmentUpload = null,
+        ?AdminFileUploadCollection $thumbnailUpload = null,
     ): AdminEditorDefinition {
         $segment = $this->module->segment();
         $params = ['module' => $segment, 'id' => (int) $article['id'], 'locale' => $contentLocale];
@@ -69,7 +70,12 @@ final readonly class RecordEditorDefinition
                 actionKey: 'save',
                 novalidate: true,
             ))
-            ->header(CmsEditorHeader::create('records', $this->urls->route($this->routes->managementRouteName($segment, 'index'), ['module' => $segment]), $context))
+            ->header(CmsEditorHeader::create(
+                'records',
+                $this->urls->route($this->routes->managementRouteName($segment, 'index'), ['module' => $segment]),
+                $context,
+                moduleName: $this->module->name(),
+            ))
             ->saveBar(CmsEditorSaveBar::create());
         $blocks = [
             Field::hidden('locale')->defaultValue($contentLocale),
@@ -117,6 +123,10 @@ final readonly class RecordEditorDefinition
             $sidebar[] = $publication;
         }
         $sidebar[] = CmsOwnershipSection::create('records', $article, $canAssignOwner, $ownerOptions);
+        $thumbnail = $this->module->thumbnailEnabled() ? CmsMediaSection::thumbnail('records', $thumbnailUpload) : null;
+        if ($thumbnail !== null) {
+            $sidebar[] = $thumbnail;
+        }
         return $builder->sidebar(new AdminEditorSidebarDefinition($sidebar))->build();
     }
 }

@@ -33,13 +33,13 @@ final readonly class ContentTypesEditor implements EditorProviderInterface
             loadPermission: $permission,
             savePermission: $permission,
             createPermission: $permission,
-            fields: array_map(static fn(string $name): EditorFieldDefinition => new EditorFieldDefinition($name, 'text', false, null), ['name', 'code', 'description', 'enabled', 'gallery_enabled', 'attachments_enabled', 'revision', 'definition']),
+            fields: array_map(static fn(string $name): EditorFieldDefinition => new EditorFieldDefinition($name, 'text', false, null), ['name', 'code', 'description', 'enabled', 'thumbnail_enabled', 'gallery_enabled', 'attachments_enabled', 'revision', 'definition']),
         );
     }
 
     public function createData(): array
     {
-        return ['type' => ['name' => '', 'code' => '', 'description' => '', 'enabled' => 1, 'gallery_enabled' => 0, 'attachments_enabled' => 0, 'revision' => 0, 'definition' => '{"fields":[],"rows":[]}']];
+        return ['type' => ['name' => '', 'code' => '', 'description' => '', 'enabled' => 1, 'thumbnail_enabled' => 0, 'gallery_enabled' => 0, 'attachments_enabled' => 0, 'revision' => 0, 'definition' => '{"fields":[],"rows":[]}']];
     }
 
     public function updateData(int $id): array
@@ -54,6 +54,7 @@ final readonly class ContentTypesEditor implements EditorProviderInterface
             ->field('code')->maxLength(64)
             ->field('description')->required()->maxLength(10000)
             ->field('enabled')->inList(['0', '1'])
+            ->field('thumbnail_enabled')->inList(['0', '1'])
             ->field('gallery_enabled')->inList(['0', '1'])
             ->field('attachments_enabled')->inList(['0', '1'])
             ->field('revision')->integer()
