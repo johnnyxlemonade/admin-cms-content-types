@@ -323,7 +323,7 @@ final class RecordValuesTest extends DefinitionTestCase
         $container = new Container();
         $container->freeze();
         $validation = new FieldValidation(new FormValidation($translator, new ValidationRuleResolver(new RuleRegistry(), $container)), new Slugger(), $translator);
-        $options = [['id' => 10,'code' => 'allowed','name' => 'Allowed','archived_at' => null]];
+        $options = [['id' => 10,'field_id' => 8,'code' => 'allowed','name' => 'Allowed','archived_at' => null]];
         $normalized = $types->get($kind)->validate($rules + ['default_value' => '','options' => $options], $validation);
         $field = ['id' => 8,'name' => 'Field','kind' => $kind,'required' => 1,'localized' => $localized,'archived_at' => null, 'code' => 'field', 'row_id' => 1, 'span' => 12] + $normalized['values'] + $types->emptyValues();
         $driver = $this->createMock(DatabaseDriverInterface::class);

@@ -35,8 +35,17 @@ final readonly class DefinitionModel
     {
         $query = $this->database->table('cms_content_field')->where('type_id', $id)->orderBy('sort_order', 'ASC')->orderBy('id', 'ASC');
         $fields = ($lock ? $query->lockForUpdate() : $query)->getArray();
+        $options = [];
+        if ($fields !== []) {
+            $optionQuery = $this->database->table('cms_content_field_option')
+                ->whereIn('field_id', array_map(static fn(array $field): int => (int) $field['id'], $fields))
+                ->orderBy('sort_order', 'ASC')->orderBy('id', 'ASC');
+            foreach (($lock ? $optionQuery->lockForUpdate() : $optionQuery)->getArray() as $option) {
+                $options[(int) $option['field_id']][] = $option;
+            }
+        }
         foreach ($fields as &$field) {
-            $field['options'] = $this->options((int) $field['id'], $lock);
+            $field['options'] = $options[(int) $field['id']] ?? [];
         }
         unset($field);
 

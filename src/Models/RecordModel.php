@@ -73,6 +73,47 @@ final readonly class RecordModel
     }
 
     /**
+     * Nacte vlastni pole cele stranky zaznamu dvema hodnotovymi dotazy
+     *
+     * @param list<int> $ids
+     * @param list<array<string,mixed>> $fields
+     * @return array<int,list<\Lemonade\Cms\ContentTypes\Record\RecordFieldValue>>
+     */
+    public function fieldValues(int $typeId, array $ids, string $locale, array $fields): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+        $stored = [];
+        $rows = $this->database->table('cms_content_record_value')->where('type_id', $typeId)->whereIn('record_id', $ids)->getArray();
+        $localized = $this->database->table('cms_content_record_translation_value v')
+            ->selectRaw('v.*')->joinOn('cms_content_record_translation t', 't.id', '=', 'v.translation_id')
+            ->where('v.type_id', $typeId)->whereIn('v.record_id', $ids)->where('t.locale', $locale)->getArray();
+        foreach ([0 => $rows, 1 => $localized] as $scope => $values) {
+            foreach ($values as $row) {
+                $stored[$scope][(int) $row['record_id']][(int) $row['field_id']] = $row;
+            }
+        }
+        $result = [];
+        foreach ($ids as $id) {
+            $result[$id] = [];
+            foreach ($fields as $field) {
+                if ($field['archived_at'] !== null) {
+                    continue;
+                }
+                $storage = $this->types->get((string) $field['kind'])->storage();
+                $row = $stored[(int) $field['localized']][$id][(int) $field['id']] ?? [];
+                $value = $storage === null ? null : ($row['value_' . $storage] ?? null);
+                $result[$id][] = \Lemonade\Cms\ContentTypes\Record\RecordFieldValue::fromStored(
+                    $field,
+                    $value === null ? null : (string) $value,
+                );
+            }
+        }
+        return $result;
+    }
+
+    /**
      * The caller must hold the CMS root lock.
      *
      * @param list<array<string,mixed>> $fields
