@@ -87,7 +87,7 @@ final class RecordLifecycleTest extends TestCase
         (new CmsContentTypesServiceProvider())->register($container);
         $container->freeze();
         $types = $container->get(FieldTypeRegistry::class);
-        $translator = $this->createMock(TranslatorInterface::class);
+        $translator = self::createStub(TranslatorInterface::class);
         $translator->method('get')->willReturnArgument(0);
         $validation = new FieldValidation(new FormValidation($translator, new ValidationRuleResolver(new RuleRegistry(), $container)), new Slugger(), $translator);
         return [$types, $validation];

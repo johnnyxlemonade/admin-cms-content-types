@@ -174,7 +174,8 @@ final readonly class DefinitionValidation
                 $this->fail('definition', 'invalid');
             }
             $archived = ($input['archived'] ?? false) === true;
-            $field['values']['archived_at'] = $archived ? (string) ($existing[$id]['archived_at'] ?? date('Y-m-d H:i:s')) : null;
+            $existingArchivedAt = $id === null ? null : ($existing[$id]['archived_at'] ?? null);
+            $field['values']['archived_at'] = $archived ? (string) ($existingArchivedAt ?? date('Y-m-d H:i:s')) : null;
             $field['values']['span'] = 12;
             $htmlId = $field['values']['html_id'] ?? 'field-' . $code;
             if (!$archived && isset($htmlIds[$htmlId])) {

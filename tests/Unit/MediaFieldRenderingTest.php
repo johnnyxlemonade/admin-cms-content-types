@@ -37,7 +37,7 @@ final class MediaFieldRenderingTest extends TestCase
         $collectionFile = (new ReflectionClass(AdminFileUploadCollection::class))->getFileName();
         self::assertIsString($collectionFile);
         $resources->register('admin', dirname($collectionFile, 2) . '/Resources/views');
-        $translator = $this->createMock(TranslatorInterface::class);
+        $translator = self::createStub(TranslatorInterface::class);
         $translator->method('get')->willReturnArgument(0);
         $helpers = new ViewHelpers(
             new UrlGenerator(new Router()),

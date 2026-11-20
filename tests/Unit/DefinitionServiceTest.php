@@ -328,7 +328,7 @@ final class DefinitionServiceTest extends DefinitionTestCase
 
     private function service(bool $allowed = true, bool $existing = false, bool $enabled = true, bool $deleted = false): DefinitionService
     {
-        $driver = $this->createMock(DatabaseDriverInterface::class);
+        $driver = self::createStub(DatabaseDriverInterface::class);
         $driver->method('protect_identifiers')->willReturnArgument(0);
         $driver->method('escape')->willReturnArgument(0);
         $driver->method('query')->willReturnCallback(function (string $sql, array|false $bindings) use ($existing, $enabled, $deleted): DatabaseResultInterface {
@@ -347,12 +347,12 @@ final class DefinitionServiceTest extends DefinitionTestCase
                     $rows = [['id' => 9]];
                 }
             }
-            $result = $this->createMock(DatabaseResultInterface::class);
+            $result = self::createStub(DatabaseResultInterface::class);
             $result->method('result_array')->willReturn($rows);
             $result->method('row_array')->willReturn($rows[0] ?? null);
             return $result;
         });
-        $connection = $this->createMock(ConnectionInterface::class);
+        $connection = self::createStub(ConnectionInterface::class);
         $connection->method('select')->willReturnCallback(static function (string $sql) use ($allowed): array {
             if (!str_contains($sql, 'SELECT DISTINCT p.code')) {
                 return [];
@@ -366,11 +366,11 @@ final class DefinitionServiceTest extends DefinitionTestCase
         $connection->method('lastInsertId')->willReturn(41);
         $connection->method('transaction')->willReturnCallback(static fn(callable $callback): mixed => $callback());
         $database = new Database($connection, $driver);
-        $principals = $this->createMock(CurrentPrincipalProviderInterface::class);
+        $principals = self::createStub(CurrentPrincipalProviderInterface::class);
         $user = new AuthenticatedUser(1, 'admin@example.test');
         $principals->method('currentUser')->willReturn($user);
         $principals->method('currentPrincipal')->willReturn(new LocalAdminPrincipal($user));
-        $audit = $this->createMock(AuditLogWriterInterface::class);
+        $audit = self::createStub(AuditLogWriterInterface::class);
         $audit->method('record')->willReturnCallback(function (DomainEvent $event): void {
             $this->audits[] = $event;
         });

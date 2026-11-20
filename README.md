@@ -1,9 +1,9 @@
 # Lemonade CMS Content Types
 
-[![PHPStan](https://github.com/johnnyxlemonade/admin-cms-content-types/actions/workflows/phpstan.yml/badge.svg)](https://github.com/johnnyxlemonade/admin-cms-content-types/actions/workflows/phpstan.yml)
-[![PHPUnit](https://github.com/johnnyxlemonade/admin-cms-content-types/actions/workflows/phpunit.yml/badge.svg)](https://github.com/johnnyxlemonade/admin-cms-content-types/actions/workflows/phpunit.yml)
-[![Coding Standards](https://github.com/johnnyxlemonade/admin-cms-content-types/actions/workflows/coding-standards.yml/badge.svg)](https://github.com/johnnyxlemonade/admin-cms-content-types/actions/workflows/coding-standards.yml)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](composer.json)
+[![Tests](https://img.shields.io/github/actions/workflow/status/johnnyxlemonade/admin-cms-content-types/phpunit.yml?branch=main&label=Tests&logo=githubactions&logoColor=white&labelColor=0f766e)](https://github.com/johnnyxlemonade/admin-cms-content-types/actions/workflows/phpunit.yml)
+[![PHP 8.3–8.6](https://img.shields.io/badge/PHP-8.3%20%7C%208.4%20%7C%208.5%20%7C%208.6-777BB4?logo=php&logoColor=white)](#requirements)
+[![PHPStan](https://img.shields.io/github/actions/workflow/status/johnnyxlemonade/admin-cms-content-types/phpstan.yml?branch=main&label=PHPStan&logo=php&logoColor=white&labelColor=5b4baf)](https://github.com/johnnyxlemonade/admin-cms-content-types/actions/workflows/phpstan.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
 
 `johnnyxlemonade/admin-cms-content-types` is an optional CMS module with the
 `cms.content-types` code. It provides a visual Content Type Builder at
@@ -40,10 +40,14 @@ it again restores access to the same collection. System media usages remain inde
 Existing CMS modules are not migrated. The host application owns public frontend
 rendering and enforces publication visibility; this package generates no frontend.
 
-## Installation
+## Requirements
 
-The package requires PHP `>=8.3 <8.6`, `johnnyxlemonade/framework`,
-`johnnyxlemonade/admin-platform`, and `johnnyxlemonade/cms-core`.
+- PHP 8.3 or newer, tested on PHP 8.3, 8.4, 8.5 and 8.6.
+- `johnnyxlemonade/framework:dev-main`.
+- `johnnyxlemonade/admin-platform:dev-main`.
+- `johnnyxlemonade/cms-core:dev-main`.
+
+## Installation
 
 ```bash
 composer require johnnyxlemonade/admin-cms-content-types:dev-main
@@ -82,4 +86,4 @@ composer qa
 
 Use DDEV for local PHP and Composer commands. The default test suite is DB-free;
 `composer qa` runs coding standards, PHPStan and PHPUnit. CI uses the same scripts,
-with PHPUnit on PHP 8.3, 8.4 and 8.5.
+with PHPUnit on PHP 8.3, 8.4, 8.5 and 8.6.

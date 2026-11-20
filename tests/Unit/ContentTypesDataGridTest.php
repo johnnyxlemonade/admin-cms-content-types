@@ -28,9 +28,9 @@ final class ContentTypesDataGridTest extends TestCase
     public function testSearchAndPaginationUseSharedDataGridTransport(): void
     {
         $queries = [];
-        $driver = $this->createMock(DatabaseDriverInterface::class);
+        $driver = self::createStub(DatabaseDriverInterface::class);
         $driver->method('protect_identifiers')->willReturnCallback(static fn(string $identifier): string => $identifier);
-        $result = $this->createMock(DatabaseResultInterface::class);
+        $result = self::createStub(DatabaseResultInterface::class);
         $result->method('result_array')->willReturn([['id' => 7, 'code' => 'document', 'name' => 'Documents', 'enabled' => 1, 'deleted_at' => null]]);
         $result->method('row_array')->willReturn(['numrows' => 26]);
         $driver->method('query')->willReturnCallback(static function (string $sql, array|false $bindings) use (&$queries, $result): DatabaseResultInterface {
@@ -59,9 +59,9 @@ final class ContentTypesDataGridTest extends TestCase
     public function testDeletedViewFiltersBothQueries(): void
     {
         $queries = [];
-        $driver = $this->createMock(DatabaseDriverInterface::class);
+        $driver = self::createStub(DatabaseDriverInterface::class);
         $driver->method('protect_identifiers')->willReturnArgument(0);
-        $result = $this->createMock(DatabaseResultInterface::class);
+        $result = self::createStub(DatabaseResultInterface::class);
         $result->method('result_array')->willReturn([]);
         $result->method('row_array')->willReturn(['numrows' => 0]);
         $driver->method('query')->willReturnCallback(static function (string $sql) use (&$queries, $result): DatabaseResultInterface {
@@ -80,9 +80,9 @@ final class ContentTypesDataGridTest extends TestCase
 
     public function testEmptyCatalogReturnsAnEmptyPage(): void
     {
-        $driver = $this->createMock(DatabaseDriverInterface::class);
+        $driver = self::createStub(DatabaseDriverInterface::class);
         $driver->method('protect_identifiers')->willReturnCallback(static fn(string $identifier): string => $identifier);
-        $result = $this->createMock(DatabaseResultInterface::class);
+        $result = self::createStub(DatabaseResultInterface::class);
         $result->method('result_array')->willReturn([]);
         $result->method('row_array')->willReturn(['numrows' => 0]);
         $driver->method('query')->willReturn($result);
@@ -96,9 +96,9 @@ final class ContentTypesDataGridTest extends TestCase
 
     public function testManagementActionsRespectPermissionAndEnabledState(): void
     {
-        $driver = $this->createMock(DatabaseDriverInterface::class);
+        $driver = self::createStub(DatabaseDriverInterface::class);
         $driver->method('protect_identifiers')->willReturnArgument(0);
-        $result = $this->createMock(DatabaseResultInterface::class);
+        $result = self::createStub(DatabaseResultInterface::class);
         $result->method('result_array')->willReturn([
             ['id' => 7, 'code' => 'active', 'name' => 'Active', 'enabled' => 1, 'deleted_at' => null],
             ['id' => 8, 'code' => 'inactive', 'name' => 'Inactive', 'enabled' => 0, 'deleted_at' => null],
@@ -129,12 +129,12 @@ final class ContentTypesDataGridTest extends TestCase
 
     private function grid(DatabaseDriverInterface $driver, bool $manage = false): ContentTypesDataGrid
     {
-        $translator = $this->createMock(TranslatorInterface::class);
+        $translator = self::createStub(TranslatorInterface::class);
         $translator->method('get')->willReturnArgument(0);
 
-        $principals = $this->createMock(CurrentPrincipalProviderInterface::class);
+        $principals = self::createStub(CurrentPrincipalProviderInterface::class);
         $principals->method('currentUser')->willReturn(new AuthenticatedUser(1, 'viewer@example.test'));
-        $connection = $this->createMock(ConnectionInterface::class);
+        $connection = self::createStub(ConnectionInterface::class);
         $connection->method('select')->willReturnCallback(static function (string $sql) use ($manage): array {
             if (!str_contains($sql, 'SELECT DISTINCT p.code')) {
                 return [];
@@ -145,7 +145,7 @@ final class ContentTypesDataGridTest extends TestCase
             }
             return array_map(static fn(string $code): array => ['code' => $code, 'name_key' => $code, 'module_code' => 'cms.content-types'], $codes);
         });
-        $actions = $this->createMock(ModuleActionPresentationFactory::class);
+        $actions = self::createStub(ModuleActionPresentationFactory::class);
         $actions->method('rowAction')->willReturnCallback(static fn(string $moduleCode, string $action, int $entityId): DataGridRowActionDefinition => new DataGridRowActionDefinition($action, $action, '/actions/' . $entityId, 'POST'));
         $router = new Router();
         $router->getNamed('admin.cms.module.edit', '/admin/cms/{module}/edit/{id}', ControllerAction::for(ModuleController::class, 'edit'));

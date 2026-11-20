@@ -20,7 +20,7 @@ abstract class DefinitionTestCase extends TestCase
 {
     protected function validation(): DefinitionValidation
     {
-        $translator = $this->createMock(TranslatorInterface::class);
+        $translator = self::createStub(TranslatorInterface::class);
         $translator->method('get')->willReturnArgument(0);
         $container = new Container();
         $container->freeze();

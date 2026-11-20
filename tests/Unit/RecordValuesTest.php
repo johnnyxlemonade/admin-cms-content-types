@@ -318,7 +318,7 @@ final class RecordValuesTest extends DefinitionTestCase
     private function writer(string $kind, int $fieldCount = 1, int $localized = 1, array $rules = []): RecordValues
     {
         $types = $this->types();
-        $translator = $this->createMock(TranslatorInterface::class);
+        $translator = self::createStub(TranslatorInterface::class);
         $translator->method('get')->willReturnArgument(0);
         $container = new Container();
         $container->freeze();
@@ -326,7 +326,7 @@ final class RecordValuesTest extends DefinitionTestCase
         $options = [['id' => 10,'field_id' => 8,'code' => 'allowed','name' => 'Allowed','archived_at' => null]];
         $normalized = $types->get($kind)->validate($rules + ['default_value' => '','options' => $options], $validation);
         $field = ['id' => 8,'name' => 'Field','kind' => $kind,'required' => 1,'localized' => $localized,'archived_at' => null, 'code' => 'field', 'row_id' => 1, 'span' => 12] + $normalized['values'] + $types->emptyValues();
-        $driver = $this->createMock(DatabaseDriverInterface::class);
+        $driver = self::createStub(DatabaseDriverInterface::class);
         $driver->method('protect_identifiers')->willReturnArgument(0);
         $driver->method('escape')->willReturnArgument(0);
         $driver->method('query')->willReturnCallback(function (string $sql) use ($field, $options, $fieldCount): DatabaseResultInterface {
@@ -338,12 +338,12 @@ final class RecordValuesTest extends DefinitionTestCase
             } elseif (str_contains($sql, 'FROM cms_content_type ')) {
                 $rows = [['id' => 1,'enabled' => 1]];
             }
-            $result = $this->createMock(DatabaseResultInterface::class);
+            $result = self::createStub(DatabaseResultInterface::class);
             $result->method('result_array')->willReturn($rows);
             $result->method('row_array')->willReturn($rows[0] ?? null);
             return $result;
         });
-        $database = new Database($this->createMock(ConnectionInterface::class), $driver);
+        $database = new Database(self::createStub(ConnectionInterface::class), $driver);
         return new RecordValues(new RecordModule(1, 'Type', 'type', true), new DefinitionModel($database), new RecordModel($database, $types), $types, $validation);
     }
 }

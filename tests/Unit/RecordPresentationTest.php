@@ -51,7 +51,7 @@ final class RecordPresentationTest extends TestCase
             self::assertSame('/content/' . $record->segment(), $router->url($routeName, ['module' => $record->segment()]));
 
             foreach (['cs', 'en'] as $locale) {
-                $translator = $this->createMock(TranslatorInterface::class);
+                $translator = self::createStub(TranslatorInterface::class);
                 $translator->method('locale')->willReturn($locale);
                 $translator->method('get')->willReturnArgument(0);
                 $factory = new EffectivePermissionGroupViewModelFactory($modules, $catalog, $translator);
