@@ -28,7 +28,7 @@ final readonly class RichTextFieldType implements FieldTypeInterface
 
     public function control(string $name, ?string $labelKey = null): AdminEditorInputFieldDefinition
     {
-        return Field::textarea($name, labelKey: $labelKey)->richText();
+        return Field::textarea($name, labelKey: $labelKey)->richText(imageUpload: true, fileUpload: true);
     }
 
     public function validate(array $input, FieldValidation $validation): array

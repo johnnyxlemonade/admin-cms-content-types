@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Lemonade\Cms\ContentTypes\Record;
 
 use Lemonade\Admin\Action\Presentation\AdminActionFormDefinition;
+use Lemonade\Admin\Cms\Content\CmsDisplaySettings;
 use Lemonade\Admin\Editor\AdminEditor\AdminEditorBuilder;
 use Lemonade\Admin\Editor\AdminEditor\AdminEditorDefinition;
 use Lemonade\Admin\Editor\AdminEditor\Field\Field;
@@ -16,6 +17,7 @@ use Lemonade\Admin\Editor\AdminEditor\Layout\CmsEditorSaveBar;
 use Lemonade\Admin\Editor\AdminEditor\Layout\CmsMediaSection;
 use Lemonade\Admin\Editor\AdminEditor\Layout\CmsOwnershipSection;
 use Lemonade\Admin\Editor\AdminEditor\Layout\CmsPublicationSection;
+use Lemonade\Admin\Editor\AdminEditor\Layout\CmsTagsField;
 use Lemonade\Admin\Editor\AdminEditor\Layout\CustomViewBlock;
 use Lemonade\Admin\Editor\AdminEditor\Layout\FieldColumn;
 use Lemonade\Admin\Editor\AdminEditor\Layout\FieldGroupBlock;
@@ -26,8 +28,14 @@ use Lemonade\Admin\Presentation\AdminFileUploadCollection;
 use Lemonade\Cms\ContentTypes\Field\FieldTypeRegistry;
 use Lemonade\Framework\Routing\UrlGenerator;
 
+/**
+ * Builds the shared editor for records of one configured content type
+ */
 final readonly class RecordEditorDefinition
 {
+    /**
+     * Configures record capabilities, fields and route generation
+     */
     public function __construct(
         private RecordModule $module,
         private RecordValues $values,
@@ -37,9 +45,12 @@ final readonly class RecordEditorDefinition
     ) {}
 
     /**
+     * Creates the record editor with localized metadata and custom fields
+     *
      * @param array<string,mixed> $article
      * @param array<int,string> $ownerOptions
      * @param array<int,AdminFileUploadCollection> $mediaUploads
+     * @param list<string> $tagOptions
      */
     public function create(
         array $article,
@@ -53,6 +64,7 @@ final readonly class RecordEditorDefinition
         ?AdminFileUploadCollection $galleryUpload = null,
         ?AdminFileUploadCollection $attachmentUpload = null,
         ?AdminFileUploadCollection $thumbnailUpload = null,
+        array $tagOptions = [],
     ): AdminEditorDefinition {
         $segment = $this->module->segment();
         $params = ['module' => $segment, 'id' => (int) $article['id'], 'locale' => $contentLocale];
@@ -80,12 +92,16 @@ final readonly class RecordEditorDefinition
             ->placeholder('', 'admin.datagrid.untitled')
             ->attributes(['maxlength' => '180'] + CmsPublicationSection::requiredAttributes($publicationState, $canPublish));
         $author = Field::text('author_name', labelKey: 'records.fields.author_name')->attributes(['maxlength' => '255']);
+        $contentColumns = [
+            new FieldColumn($title, md: 12),
+            new FieldColumn($author, md: 12),
+        ];
+        if ($this->module->tagsEnabled()) {
+            $contentColumns[] = CmsTagsField::column('records', $tagOptions, $translation['tags'] ?? []);
+        }
         $contentBlocks = [
             Field::hidden('locale')->defaultValue($contentLocale),
-            new FieldGroupBlock([
-                new FieldColumn($title, md: 12),
-                new FieldColumn($author, md: 12),
-            ]),
+            new FieldGroupBlock($contentColumns),
         ];
         $contentFields = $this->contentFields(
             publicationState: $publicationState,
@@ -105,9 +121,10 @@ final readonly class RecordEditorDefinition
             default: true,
         ));
         $builder->tab(SeoSection::tab(
-            pathPrefix: '/',
+            pathPrefix: $this->pathPrefix((string) ($translation['canonical_path'] ?? ''), $contentLocale),
             autoGenerateUrl: trim((string) ($translation['canonical_path'] ?? '')) === '',
         ));
+        $builder->tab(CmsDisplaySettings::tab());
         if ($this->module->galleryEnabled()) {
             $builder->tab(CmsMediaSection::gallery('records', $galleryUpload));
         }
@@ -127,6 +144,20 @@ final readonly class RecordEditorDefinition
         }
 
         return $builder->sidebar(new AdminEditorSidebarDefinition($sidebar))->build();
+    }
+
+    /**
+     * Returns the displayed directory for the current or next canonical URL
+     */
+    private function pathPrefix(string $canonicalPath, string $locale): string
+    {
+        $canonicalPath = trim($canonicalPath, '/');
+        $prefix = $canonicalPath === '' ? $this->module->routePrefix($locale) : dirname($canonicalPath);
+        if ($prefix === '.') {
+            $prefix = '';
+        }
+
+        return '/' . ($prefix === '' ? '' : $prefix . '/');
     }
 
     /**

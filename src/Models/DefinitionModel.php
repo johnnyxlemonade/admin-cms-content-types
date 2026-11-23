@@ -70,6 +70,21 @@ final readonly class DefinitionModel
     }
 
     /**
+     * Returns localized canonical path prefixes for one content type
+     *
+     * @return array<string,string>
+     */
+    public function routePrefixes(int $typeId): array
+    {
+        $prefixes = [];
+        foreach ($this->database->table('cms_content_type_route_prefix')->where('type_id', $typeId)->getArray() as $row) {
+            $prefixes[(string) $row['locale']] = (string) $row['path_prefix'];
+        }
+
+        return $prefixes;
+    }
+
+    /**
      * @param array<string,int|string|null> $values
      */
     public function createType(array $values): int
@@ -85,6 +100,35 @@ final readonly class DefinitionModel
     public function updateType(int $id, array $values, int $revision): void
     {
         $this->database->table('cms_content_type')->where('id', $id)->set($values + ['revision' => $revision + 1, 'updated_at' => date('Y-m-d H:i:s')])->update();
+    }
+
+    /**
+     * Synchronizes only locale prefixes submitted by the definition editor
+     *
+     * @param array<string,string> $prefixes
+     */
+    public function saveRoutePrefixes(int $typeId, array $prefixes): void
+    {
+        foreach ($prefixes as $locale => $pathPrefix) {
+            $query = $this->database->table('cms_content_type_route_prefix')
+                ->where('type_id', $typeId)
+                ->where('locale', $locale);
+            if ($pathPrefix === '') {
+                $query->delete();
+
+                continue;
+            }
+            if ($query->exists()) {
+                $query->set(['path_prefix' => $pathPrefix])->update();
+
+                continue;
+            }
+            $this->database->table('cms_content_type_route_prefix')->insert([
+                'type_id' => $typeId,
+                'locale' => $locale,
+                'path_prefix' => $pathPrefix,
+            ]);
+        }
     }
 
     public function saveRow(int $typeId, ?int $id, int $position): int

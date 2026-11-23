@@ -13,6 +13,7 @@ use Lemonade\Admin\Module\Contract\AdminModuleDefinitionInterface;
 use Lemonade\Admin\Modules\Manifest\ModuleManifestInterface;
 use Lemonade\Admin\Modules\Migration\ModuleMigrationManifestInterface;
 use Lemonade\Cms\ContentTypes\Migrations\AddContentTypeSystemMedia;
+use Lemonade\Cms\ContentTypes\Migrations\AddContentTypeTagsAndRoutePrefixes;
 use Lemonade\Cms\ContentTypes\Migrations\AddContentTypeThumbnail;
 use Lemonade\Cms\ContentTypes\Migrations\CreateContentFieldDefinitions;
 use Lemonade\Cms\ContentTypes\Migrations\CreateContentRecords;
@@ -49,6 +50,7 @@ final readonly class ModuleManifest implements ModuleManifestInterface, ModuleMi
             CreateContentRecords::class,
             AddContentTypeSystemMedia::class,
             AddContentTypeThumbnail::class,
+            AddContentTypeTagsAndRoutePrefixes::class,
         ];
     }
 

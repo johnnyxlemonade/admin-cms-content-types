@@ -33,5 +33,12 @@ use Lemonade\Framework\View\ViewHelpers;
                 <small data-lemonade-i18n="content-types.editor.system_features_navigation_help"><?= e($helpers->lang('content-types.editor.system_features_navigation_help')) ?></small>
             </span>
         </a>
+        <a href="#cms.content-types-section-route-prefixes">
+            <span class="lm-content-type-navigation-icon" aria-hidden="true"><i class="bi bi-link-45deg"></i></span>
+            <span class="lm-content-type-navigation-copy">
+                <strong data-lemonade-i18n="content-types.editor.route_prefixes"><?= e($helpers->lang('content-types.editor.route_prefixes')) ?></strong>
+                <small data-lemonade-i18n="content-types.editor.route_prefixes_navigation_help"><?= e($helpers->lang('content-types.editor.route_prefixes_navigation_help')) ?></small>
+            </span>
+        </a>
     </nav>
 </div>

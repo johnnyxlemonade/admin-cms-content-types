@@ -16,6 +16,7 @@ use Lemonade\Admin\Editor\AdminEditor\Layout\FieldGroupBlock;
 use Lemonade\Admin\Editor\AdminEditor\Layout\SectionBlock;
 use Lemonade\Admin\Editor\AdminEditor\Rendering\AdminEditorFieldRenderer;
 use Lemonade\Admin\Icon\AdminIcon;
+use Lemonade\Admin\Localization\LanguageRegistry;
 use Lemonade\Cms\ContentTypes\Field\FieldTypeRegistry;
 use Lemonade\Framework\Routing\UrlGenerator;
 
@@ -25,6 +26,7 @@ final readonly class ContentTypesEditorDefinition
         private UrlGenerator $urls,
         private FieldTypeRegistry $types,
         private AdminEditorFieldRenderer $fields,
+        private LanguageRegistry $languages,
     ) {}
 
     /**
@@ -48,6 +50,21 @@ final readonly class ContentTypesEditorDefinition
         $code = Field::text('code', labelKey: 'content-types.fields.code')->help('', 'content-types.editor.type_code_help');
         if ($id !== null) {
             $code = $code->readonly();
+        }
+        $routePrefixColumns = [];
+        foreach ($this->languages->enabledLocales() as $locale) {
+            $routePrefixColumns[] = new FieldColumn(
+                Field::text(
+                    'route_prefix_' . $locale['code'],
+                    $locale['name'] . ' (' . strtoupper($locale['code']) . ')',
+                )
+                    ->helpKey('content-types.help.route_prefix')
+                    ->attributes([
+                        'maxlength' => '180',
+                        'placeholder' => $locale['code'] === 'cs' ? 'volna-mista' : 'careers',
+                    ]),
+                md: 6,
+            );
         }
 
         return AdminEditorBuilder::create('cms.content-types')
@@ -80,26 +97,39 @@ final readonly class ContentTypesEditorDefinition
                         new FieldColumn(
                             Field::toggle('thumbnail_enabled', labelKey: 'content-types.fields.thumbnail_enabled')->helpKey('content-types.help.thumbnail_enabled'),
                             md: 6,
-                            xl: 4,
+                            xl: 3,
                             cardIcon: AdminIcon::Image,
                         ),
                         new FieldColumn(
                             Field::toggle('gallery_enabled', labelKey: 'content-types.fields.gallery_enabled')->helpKey('content-types.help.gallery_enabled'),
                             md: 6,
-                            xl: 4,
+                            xl: 3,
                             cardIcon: AdminIcon::Images,
                         ),
                         new FieldColumn(
                             Field::toggle('attachments_enabled', labelKey: 'content-types.fields.attachments_enabled')->helpKey('content-types.help.attachments_enabled'),
                             md: 6,
-                            xl: 4,
+                            xl: 3,
                             cardIcon: AdminIcon::Paperclip,
+                        ),
+                        new FieldColumn(
+                            Field::toggle('tags_enabled', labelKey: 'content-types.fields.tags_enabled')->helpKey('content-types.help.tags_enabled'),
+                            md: 6,
+                            xl: 3,
+                            cardIcon: AdminIcon::Tags,
                         ),
                     ]),
                 ],
                 title: '',
                 titleKey: 'content-types.editor.system_features_title',
                 descriptionKey: 'content-types.editor.system_features_help',
+            ))
+            ->block(new SectionBlock(
+                id: 'route-prefixes',
+                blocks: [new FieldGroupBlock($routePrefixColumns)],
+                title: '',
+                titleKey: 'content-types.editor.route_prefixes_title',
+                descriptionKey: 'content-types.editor.route_prefixes_help',
             ))
             ->block(new CustomViewBlock('content-types::builder', [
                 'adminEditorFields' => $this->fields,

@@ -74,11 +74,11 @@ final readonly class RecordEditor implements
                 ), $this->values->scalarFields()),
                 new EditorFieldDefinition(name: 'locale', type: 'text', readOnly: false, permission: null),
                 new EditorFieldDefinition(name: 'title', type: 'text', readOnly: false, permission: null),
-                new EditorFieldDefinition(name: 'summary', type: 'text', readOnly: false, permission: null),
-                new EditorFieldDefinition(name: 'content', type: 'text', readOnly: false, permission: null),
                 new EditorFieldDefinition(name: 'page_title', type: 'text', readOnly: false, permission: null),
                 new EditorFieldDefinition(name: 'meta_description', type: 'text', readOnly: false, permission: null),
-                new EditorFieldDefinition(name: 'tags', type: 'text', readOnly: false, permission: null),
+                ...($this->module->tagsEnabled()
+                    ? [new EditorFieldDefinition(name: 'tags', type: 'text', readOnly: false, permission: null)]
+                    : []),
             ],
         );
     }
@@ -120,6 +120,10 @@ final readonly class RecordEditor implements
         if ($article === null) {
             throw new EditorEntityNotFoundException('Content record not found.');
         }
+        $article['translations'] = array_map(
+            static fn(array $translation): array => array_diff_key($translation, ['summary' => true, 'content' => true]),
+            $article['translations'],
+        );
 
         return ['article' => $article, 'locales' => $this->content->editorLocales($id)];
     }
@@ -157,7 +161,15 @@ final readonly class RecordEditor implements
     {
         try {
             $actorId = $this->actors->requireLocalUser()->id();
-            $this->service->save($actorId, $id, CmsContentInput::fromEditor($data), RecordData::fromEditor($data));
+            if (!$this->module->tagsEnabled()) {
+                $data['tags'] = $this->storedTags($id, (string) ($data['locale'] ?? ''));
+            }
+            $this->service->save(
+                $actorId,
+                $id,
+                CmsContentInput::fromEditor(['summary' => null, 'content' => null] + $data),
+                RecordData::fromEditor($data),
+            );
         } catch (DefinitionValidationException $exception) {
             throw new EditorValidationException(implode(' ', $exception->errors()), previous: $exception, errors: $exception->errors());
         } catch (CmsContentValidationException $exception) {
@@ -215,5 +227,27 @@ final readonly class RecordEditor implements
             $this->routes->managementRouteName($this->module->segment(), 'edit'),
             ['module' => $this->module->segment(), 'id' => $articleId, 'locale' => $locale],
         );
+    }
+
+    /**
+     * Preserves localized tags while the type-level capability is disabled
+     *
+     * @return list<string>
+     */
+    private function storedTags(int $id, string $locale): array
+    {
+        $article = $this->content->findForEditor($id);
+        foreach ($article['translations'] ?? [] as $translation) {
+            if (($translation['locale'] ?? null) === $locale) {
+                $tags = $translation['tags'] ?? null;
+                if (!is_array($tags)) {
+                    return [];
+                }
+
+                return array_values(array_filter($tags, is_string(...)));
+            }
+        }
+
+        return [];
     }
 }

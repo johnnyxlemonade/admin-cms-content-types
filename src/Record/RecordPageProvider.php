@@ -24,6 +24,7 @@ use Lemonade\Admin\Page\ModulePage;
 use Lemonade\Admin\Presentation\AdminFileUploadCollection;
 use Lemonade\Admin\Presentation\AdminFileUploadComponent;
 use Lemonade\Cms\CmsPublicationState;
+use Lemonade\Cms\Content\CmsContentReadModel;
 use Lemonade\Cms\ContentTypes\Field\FieldTypeRegistry;
 use Lemonade\Framework\Localization\TranslatorInterface;
 use Lemonade\Framework\Routing\UrlGenerator;
@@ -41,6 +42,7 @@ final readonly class RecordPageProvider implements ModuleIndexPageProviderInterf
         private RecordEditorDefinition $adminEditorDefinitions,
         private LocalUserDirectory $users,
         private AdminFileUploadComponent $files,
+        private CmsContentReadModel $content,
     ) {}
 
     public function indexPermission(): string
@@ -228,6 +230,9 @@ final readonly class RecordPageProvider implements ModuleIndexPageProviderInterf
             galleryUpload: $galleryUpload,
             attachmentUpload: $attachmentUpload,
             thumbnailUpload: $thumbnailUpload,
+            tagOptions: $this->module->tagsEnabled()
+                ? $this->content->tagNamesForLocale($contentLocale)
+                : [],
         );
     }
 
@@ -247,8 +252,6 @@ final readonly class RecordPageProvider implements ModuleIndexPageProviderInterf
             'title' => (string) ($translation['title'] ?? ''),
             'author_name' => (string) ($article['author_name'] ?? ''),
             'tags' => $translation['tags'] ?? [],
-            'summary' => (string) ($translation['summary'] ?? ''),
-            'content' => (string) ($translation['content'] ?? ''),
             'page_title' => (string) ($translation['page_title'] ?? ''),
             'meta_description' => (string) ($translation['meta_description'] ?? ''),
             'url_segment' => $canonicalPath === '' ? '' : basename($canonicalPath),

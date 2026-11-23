@@ -9,6 +9,7 @@ use Lemonade\Admin\Editor\EditorDefinition;
 use Lemonade\Admin\Editor\EditorFieldDefinition;
 use Lemonade\Admin\Editor\EditorSaveResult;
 use Lemonade\Admin\Editor\Exception\EditorValidationException;
+use Lemonade\Admin\Localization\LanguageRegistry;
 use Lemonade\Cms\ContentTypes\DefinitionService;
 use Lemonade\Cms\ContentTypes\Exception\DefinitionValidationException;
 use Lemonade\Cms\ContentTypes\ModuleManifest;
@@ -17,7 +18,11 @@ use Lemonade\Framework\Validation\ValidationSchema;
 
 final readonly class ContentTypesEditor implements EditorProviderInterface
 {
-    public function __construct(private DefinitionService $definitions, private UrlGenerator $urls) {}
+    public function __construct(
+        private DefinitionService $definitions,
+        private UrlGenerator $urls,
+        private LanguageRegistry $languages,
+    ) {}
 
     public function editorDefinition(): EditorDefinition
     {
@@ -34,14 +39,26 @@ final readonly class ContentTypesEditor implements EditorProviderInterface
                     readOnly: false,
                     permission: null,
                 ),
-                ['name', 'code', 'description', 'enabled', 'thumbnail_enabled', 'gallery_enabled', 'attachments_enabled', 'revision', 'definition'],
+                [
+                    'name',
+                    'code',
+                    'description',
+                    'enabled',
+                    'thumbnail_enabled',
+                    'gallery_enabled',
+                    'attachments_enabled',
+                    'tags_enabled',
+                    'revision',
+                    'definition',
+                    ...$this->routePrefixFieldNames(),
+                ],
             ),
         );
     }
 
     public function createData(): array
     {
-        return ['type' => [
+        $type = [
             'name' => '',
             'code' => '',
             'description' => '',
@@ -49,9 +66,15 @@ final readonly class ContentTypesEditor implements EditorProviderInterface
             'thumbnail_enabled' => 0,
             'gallery_enabled' => 0,
             'attachments_enabled' => 0,
+            'tags_enabled' => 0,
             'revision' => 0,
             'definition' => '{"fields":[],"rows":[]}',
-        ]];
+        ];
+        foreach ($this->routePrefixFieldNames() as $field) {
+            $type[$field] = '';
+        }
+
+        return ['type' => $type];
     }
 
     public function updateData(int $id): array
@@ -61,7 +84,7 @@ final readonly class ContentTypesEditor implements EditorProviderInterface
 
     public function createValidationSchema(): ValidationSchema
     {
-        return ValidationSchema::create()
+        $schema = ValidationSchema::create()
             ->field('name')->required()->maxLength(180)
             ->field('code')->maxLength(64)
             ->field('description')->required()->maxLength(10000)
@@ -69,8 +92,14 @@ final readonly class ContentTypesEditor implements EditorProviderInterface
             ->field('thumbnail_enabled')->inList(['0', '1'])
             ->field('gallery_enabled')->inList(['0', '1'])
             ->field('attachments_enabled')->inList(['0', '1'])
+            ->field('tags_enabled')->inList(['0', '1'])
             ->field('revision')->integer()
-            ->field('definition')->required()->maxLength(1000000)->end();
+            ->field('definition')->required()->maxLength(1000000);
+        foreach ($this->routePrefixFieldNames() as $field) {
+            $schema->field($field)->maxLength(180);
+        }
+
+        return $schema->end();
     }
 
     public function updateValidationSchema(int $id): ValidationSchema
@@ -101,5 +130,18 @@ final readonly class ContentTypesEditor implements EditorProviderInterface
         $url = $this->urls->route('admin.cms.module.edit', ['module' => 'content-types', 'id' => $id]);
 
         return new EditorSaveResult(['id' => $id, 'editUrl' => $url, 'successUrl' => $url], 'content-types.editor.saved');
+    }
+
+    /**
+     * Returns transport field names for currently enabled content locales
+     *
+     * @return list<string>
+     */
+    private function routePrefixFieldNames(): array
+    {
+        return array_map(
+            static fn(array $locale): string => 'route_prefix_' . $locale['code'],
+            $this->languages->enabledLocales(),
+        );
     }
 }

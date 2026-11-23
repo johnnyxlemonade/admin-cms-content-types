@@ -41,7 +41,38 @@ final readonly class DefinitionValidation
             'thumbnail_enabled' => $this->values->boolean($input, 'thumbnail_enabled'),
             'gallery_enabled' => $this->values->boolean($input, 'gallery_enabled'),
             'attachments_enabled' => $this->values->boolean($input, 'attachments_enabled'),
+            'tags_enabled' => $this->values->boolean($input, 'tags_enabled'),
         ];
+    }
+
+    /**
+     * Validates localized canonical path prefixes submitted by the editor
+     *
+     * @param array<string,mixed> $input
+     * @return array<string,string>
+     */
+    public function routePrefixes(array $input): array
+    {
+        $prefixes = [];
+        foreach ($input as $field => $value) {
+            if (!str_starts_with($field, 'route_prefix_')) {
+                continue;
+            }
+            $locale = substr($field, strlen('route_prefix_'));
+            if (preg_match('/^[a-z][a-z0-9-]{1,9}$/D', $locale) !== 1) {
+                $this->fail($field, 'invalid');
+            }
+            $pathPrefix = trim(trim($this->values->text([$field => $value], $field)), '/');
+            if ($pathPrefix !== '' && (
+                strlen($pathPrefix) > 180
+                || preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*$/D', $pathPrefix) !== 1
+            )) {
+                $this->fail($field, 'route_prefix');
+            }
+            $prefixes[$locale] = $pathPrefix;
+        }
+
+        return $prefixes;
     }
 
     /**

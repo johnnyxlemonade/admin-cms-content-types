@@ -23,6 +23,13 @@ final readonly class RecordModel
         if (!$this->database->tableExists('cms_content_record')) {
             return [];
         }
+        $routePrefixes = [];
+        if ($this->database->tableExists('cms_content_type_route_prefix')) {
+            foreach ($this->database->table('cms_content_type_route_prefix')->getArray() as $row) {
+                $routePrefixes[(int) $row['type_id']][(string) $row['locale']] = (string) $row['path_prefix'];
+            }
+        }
+
         return array_map(static fn(array $row): RecordModule => new RecordModule(
             id: (int) $row['id'],
             name: (string) $row['name'],
@@ -32,6 +39,8 @@ final readonly class RecordModel
             galleryEnabled: (int) ($row['gallery_enabled'] ?? 0) === 1,
             attachmentsEnabled: (int) ($row['attachments_enabled'] ?? 0) === 1,
             thumbnailEnabled: (int) ($row['thumbnail_enabled'] ?? 0) === 1,
+            tagsEnabled: (int) ($row['tags_enabled'] ?? 0) === 1,
+            routePrefixes: $routePrefixes[(int) $row['id']] ?? [],
         ), $this->database->table('cms_content_type')->orderBy('id')->getArray());
     }
 

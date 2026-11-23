@@ -18,10 +18,12 @@ attributes. Definitions and typed values are stored relationally, without JSON
 persistence; decimal values retain their precision without float conversion.
 
 Active types appear in the Content navigation group with a standard DataGrid and
-AdminEditor. Records reuse CMS title, SEO, publication, ownership, audit, soft
-delete and restore. Custom values and system data share one CMS lifecycle
-transaction. Drafts may omit required values; publication and edits to published
-content enforce them. Type and range validation also applies to drafts.
+AdminEditor. Records reuse CMS title, display settings, SEO, publication, ownership,
+audit, soft delete and restore. Content structure comes exclusively from the defined
+custom fields; `textarea` and `richtext` fields remain available and rich-text images
+and files use the shared Admin upload usages. Custom values and system data share one
+CMS lifecycle transaction. Drafts may omit required values; publication and edits to
+published content enforce them. Type and range validation also applies to drafts.
 
 The Admin UI supports CS/EN; user-entered names, help and Select labels remain
 unchanged when switching the UI language. Deactivating a type hides its navigation
@@ -33,10 +35,13 @@ file IDs are never duplicated into scalar value tables. Renaming or moving a fie
 preserves its collection. Archiving unregisters its usage without deleting files;
 restoring the definition reconnects the same collection. Groups, repeaters and
 relations are not supported.
-Each content type can independently enable the shared CMS thumbnail, gallery and
-attachments. All three are off by default. Disabling a feature hides its editor
-component and rejects its file operations without deleting existing files; enabling
-it again restores access to the same collection. System media usages remain independent of custom field collections.
+Each content type can independently enable the shared CMS thumbnail, gallery,
+attachments and localized tags. All four are off by default. Disabling a feature
+hides its editor component and rejects its submitted or file values without deleting
+existing data; enabling it again restores access to the same values. System media
+usages remain independent of custom field collections. Optional localized route
+prefixes affect only newly reserved canonical URLs; existing `cms_route` paths keep
+their directory when their final URL segment is edited.
 Existing CMS modules are not migrated. The host application owns public frontend
 rendering and enforces publication visibility; this package generates no frontend.
 

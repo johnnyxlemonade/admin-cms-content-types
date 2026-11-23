@@ -261,7 +261,7 @@ final class RecordValuesTest extends DefinitionTestCase
         );
         $editor = $definition->create(['id' => 12, 'translations' => []], 'cs', false, thumbnailUpload: $thumbnailUpload);
         $tabs = array_map(static fn($tab): string => $tab->id(), $editor->tabs());
-        self::assertSame(['content', 'seo', ...($gallery ? ['gallery'] : []), ...($attachments ? ['attachments'] : [])], $tabs);
+        self::assertSame(['content', 'seo', 'settings', ...($gallery ? ['gallery'] : []), ...($attachments ? ['attachments'] : [])], $tabs);
         $sidebarIds = array_map(static fn(SectionBlock $panel): string => $panel->id(), $editor->sidebar()?->panels() ?? []);
         self::assertSame($thumbnail, in_array('thumbnail', $sidebarIds, true));
 

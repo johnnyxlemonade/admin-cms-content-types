@@ -29,8 +29,6 @@ final readonly class RecordEditorValidationSchema
             ->field('publication_state', $this->translator->get('records.fields.publication_state'))
                 ->inList(array_keys(CmsPublicationState::editorOptionLabelKeys()), $this->translator->get('records.validation.publication_invalid'))
             ->field('published_at', $this->translator->get('records.fields.published_at'))
-            ->field('summary', $this->translator->get('records.fields.summary'))
-            ->field('content', $this->translator->get('records.fields.content'))
             ->field('tags', $this->translator->get('records.fields.tags'))
             ->end(), $this->translator);
     }

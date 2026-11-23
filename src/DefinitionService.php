@@ -53,6 +53,9 @@ final readonly class DefinitionService
             }
         }
         $type['definition'] = json_encode(['fields' => $fields, 'rows' => $rows], JSON_THROW_ON_ERROR);
+        foreach ($this->model->routePrefixes($id) as $locale => $pathPrefix) {
+            $type['route_prefix_' . $locale] = $pathPrefix;
+        }
 
         return $type;
     }
@@ -65,8 +68,9 @@ final readonly class DefinitionService
         $this->requireManagement();
         $actor = $this->actors->requireLocalUser();
         $values = $this->validation->type($input);
+        $routePrefixes = $this->validation->routePrefixes($input);
         try {
-            return $this->events->execute(AuditActor::user($actor->id()), function (TransactionalEventCollector $events) use ($id, $input, $values): int {
+            return $this->events->execute(AuditActor::user($actor->id()), function (TransactionalEventCollector $events) use ($id, $input, $values, $routePrefixes): int {
                 $existing = $id === null ? null : ($this->model->type($id, true) ?? throw new EditorEntityNotFoundException('Content type not found.'));
                 if ($existing !== null) {
                     if ((string) $values['code'] !== (string) $existing['code']) {
@@ -108,6 +112,7 @@ final readonly class DefinitionService
                 if ($existing !== null) {
                     $this->model->updateType($typeId, $values, (int) $existing['revision']);
                 }
+                $this->model->saveRoutePrefixes($typeId, $routePrefixes);
                 $events->record(new DomainEvent(
                     ModuleManifest::CODE . ($existing === null ? '.created' : '.updated'),
                     ModuleManifest::CODE,

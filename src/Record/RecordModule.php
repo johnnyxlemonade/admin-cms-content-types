@@ -16,8 +16,16 @@ use Lemonade\Admin\Presentation\AdminFileCapabilities;
 use Lemonade\Admin\Presentation\AdminFilePresentation;
 use Lemonade\Cms\Content\CmsContentDefinition;
 
+/**
+ * Exposes one relational content type as a standard Admin CMS module
+ */
 final readonly class RecordModule implements AdminModuleDefinitionInterface, AdminModuleFileCapabilitiesInterface
 {
+    /**
+     * Configures one dynamic content module and its optional capabilities
+     *
+     * @param array<string,string> $routePrefixes
+     */
     public function __construct(
         private int $id,
         private string $name,
@@ -27,14 +35,21 @@ final readonly class RecordModule implements AdminModuleDefinitionInterface, Adm
         private bool $galleryEnabled = false,
         private bool $attachmentsEnabled = false,
         private bool $thumbnailEnabled = false,
+        private bool $tagsEnabled = false,
+        private array $routePrefixes = [],
     ) {}
 
+    /**
+     * Enables shared system media and rich-text uploads for the record editor
+     */
     public function fileCapabilities(): AdminFileCapabilities
     {
         return new AdminFileCapabilities(
             thumbnail: $this->thumbnailEnabled ? AdminFilePresentation::Landscape : null,
             gallery: $this->galleryEnabled,
             attachments: $this->attachmentsEnabled,
+            richTextImages: true,
+            richTextFiles: true,
         );
     }
 
@@ -51,6 +66,22 @@ final readonly class RecordModule implements AdminModuleDefinitionInterface, Adm
     public function attachmentsEnabled(): bool
     {
         return $this->attachmentsEnabled;
+    }
+
+    /**
+     * Determines whether records of this type support localized tags
+     */
+    public function tagsEnabled(): bool
+    {
+        return $this->tagsEnabled;
+    }
+
+    /**
+     * Returns the configured canonical path prefix for one locale
+     */
+    public function routePrefix(string $locale): string
+    {
+        return $this->routePrefixes[$locale] ?? '';
     }
 
     public function code(): string
@@ -92,6 +123,7 @@ final readonly class RecordModule implements AdminModuleDefinitionInterface, Adm
             validationPrefix: 'records',
             dataClass: RecordData::class,
             rootScope: ['type_id' => $this->id],
+            routePrefixes: $this->routePrefixes,
         );
     }
 

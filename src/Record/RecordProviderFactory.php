@@ -135,6 +135,7 @@ final readonly class RecordProviderFactory implements ModuleProviderFactoryInter
                 ),
                 users: $container->get(LocalUserDirectory::class),
                 files: $container->get(AdminFileUploadComponent::class),
+                content: $read,
             );
         }
         throw new InvalidArgumentException('Unsupported content runtime capability.');
