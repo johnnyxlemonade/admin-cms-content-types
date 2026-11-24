@@ -18,8 +18,12 @@ use Lemonade\Admin\Editor\AdminEditor\Rendering\AdminEditorFieldRenderer;
 use Lemonade\Admin\Icon\AdminIcon;
 use Lemonade\Admin\Localization\LanguageRegistry;
 use Lemonade\Cms\ContentTypes\Field\FieldTypeRegistry;
+use Lemonade\Cms\ContentTypes\Models\DefinitionModel;
 use Lemonade\Framework\Routing\UrlGenerator;
 
+/**
+ * Builds the Admin editor for a Content Type definition
+ */
 final readonly class ContentTypesEditorDefinition
 {
     public function __construct(
@@ -27,6 +31,7 @@ final readonly class ContentTypesEditorDefinition
         private FieldTypeRegistry $types,
         private AdminEditorFieldRenderer $fields,
         private LanguageRegistry $languages,
+        private DefinitionModel $definitions,
     ) {}
 
     /**
@@ -133,7 +138,7 @@ final readonly class ContentTypesEditorDefinition
             ))
             ->block(new CustomViewBlock('content-types::builder', [
                 'adminEditorFields' => $this->fields,
-                'inspectors' => $this->types->inspectors(),
+                'inspectors' => $this->types->inspectors($this->definitions->relationTargetOptions()),
             ]))
             ->saveBar(CmsEditorSaveBar::create())
             ->build();

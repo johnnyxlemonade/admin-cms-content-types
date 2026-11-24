@@ -40,6 +40,9 @@ use Lemonade\Framework\Localization\TranslatorInterface;
 use Lemonade\Framework\Routing\UrlGenerator;
 use Lemonade\Framework\Support\Slug\Slugger;
 
+/**
+ * Creates standard Admin providers for dynamic Content Types
+ */
 final readonly class RecordProviderFactory implements ModuleProviderFactoryInterface
 {
     public function __construct(private ContainerInterface $container) {}
@@ -60,6 +63,7 @@ final readonly class RecordProviderFactory implements ModuleProviderFactoryInter
             model: $container->get(RecordModel::class),
             types: $registry,
             validation: $container->get(FieldValidation::class),
+            authorization: $container->get(AuthorizationService::class),
         );
         $read = new CmsContentReadModel($database, $definition);
         $lifecycle = new CmsContentLifecycle(
@@ -113,6 +117,7 @@ final readonly class RecordProviderFactory implements ModuleProviderFactoryInter
             urls: $container->get(UrlGenerator::class),
             languages: $container->get(LanguageRegistry::class),
             contentGrid: new CmsContentDataGrid($database, $definition),
+            records: $container->get(RecordModel::class),
         );
         if ($contract === DataGridProviderInterface::class) {
             return $grid;

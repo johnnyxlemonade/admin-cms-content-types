@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Lemonade\Cms\ContentTypes\Tests\Unit;
 
 use InvalidArgumentException;
+use Lemonade\Admin\Editor\AdminEditor\Field\SelectField;
 use Lemonade\Cms\ContentTypes\Field\FieldTypeRegistry;
 use Lemonade\Cms\ContentTypes\Field\Types\TextFieldType;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -14,7 +15,7 @@ final class FieldTypeRegistryTest extends DefinitionTestCase
     public function testRegistryProvidesAllControlsAndRulesWithoutDuplicateCommonFields(): void
     {
         $types = $this->types();
-        self::assertSame(['text', 'textarea', 'richtext', 'integer', 'decimal', 'boolean', 'date', 'datetime', 'select', 'image', 'gallery', 'file', 'files'], $types->codes());
+        self::assertSame(['text', 'textarea', 'richtext', 'integer', 'decimal', 'boolean', 'date', 'datetime', 'select', 'image', 'gallery', 'file', 'files', 'relation'], $types->codes());
         self::assertSame($types->codes(), array_keys($types->inspectors()));
         foreach ($types->inspectors() as $code => $controls) {
             $names = array_map(static fn($control): string => $control->name(), $controls);
@@ -29,6 +30,18 @@ final class FieldTypeRegistryTest extends DefinitionTestCase
             }
             if ($types->get($code)->storage() !== null) {
                 self::assertArrayHasKey('default_' . $types->get($code)->storage(), $types->emptyValues());
+            } elseif ($code === 'relation') {
+                self::assertContains('required', $names);
+                self::assertContains('relation_target_type_id', $names);
+                self::assertContains('relation_multiple', $names);
+                foreach ($controls as $control) {
+                    if ($control->name() === 'relation_target_type_id') {
+                        self::assertInstanceOf(SelectField::class, $control);
+                        self::assertTrue($control->isRequired());
+                    }
+                }
+                self::assertNotContains('localized', $names);
+                self::assertNotContains('default_value', $names);
             } else {
                 foreach (['required', 'localized', 'default_value'] as $name) {
                     self::assertNotContains($name, $names);
@@ -69,6 +82,17 @@ final class FieldTypeRegistryTest extends DefinitionTestCase
         self::assertSame('100', $registry->get('decimal')->editorValues(['default_decimal' => '100.00000000'])['default_value']);
         self::assertSame('100', $registry->get('decimal')->editorValues(['default_decimal' => '100'])['default_value']);
         self::assertSame(100, $registry->get('integer')->editorValues(['default_integer' => 100])['default_value']);
+    }
+
+    public function testRelationConfigurationIsNotProjectedIntoOtherFieldKinds(): void
+    {
+        $field = [
+            'id' => 1, 'kind' => 'text', 'code' => 'title', 'archived_at' => null,
+            'relation_target_type_id' => null, 'relation_multiple' => 0, 'options' => [],
+        ];
+        $projection = $this->types()->editorField($field);
+        self::assertArrayNotHasKey('relation_target_type_id', $projection);
+        self::assertArrayNotHasKey('relation_multiple', $projection);
     }
 
     public function testDuplicateTypeCodeIsRejected(): void

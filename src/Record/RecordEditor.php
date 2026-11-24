@@ -28,6 +28,9 @@ use Lemonade\Framework\Localization\TranslatorInterface;
 use Lemonade\Framework\Routing\UrlGenerator;
 use Lemonade\Framework\Validation\ValidationSchema;
 
+/**
+ * Handles Admin editor access, validation and saves for records
+ */
 final readonly class RecordEditor implements
     EditorProviderInterface,
     EditorAccessPolicyInterface,
@@ -52,6 +55,15 @@ final readonly class RecordEditor implements
 
     public function editorDefinition(): EditorDefinition
     {
+        $contentFields = [];
+        foreach ($this->values->scalarFields() as $field) {
+            $contentFields[] = new EditorFieldDefinition('field_' . $field['id'], 'text', false, null);
+        }
+        foreach ($this->values->relationFields() as $field) {
+            $contentFields[] = new EditorFieldDefinition('field_' . $field['id'], 'text', false, null);
+            $contentFields[] = new EditorFieldDefinition('field_' . $field['id'] . '_present', 'text', false, null);
+        }
+
         return new EditorDefinition(
             loadPermission: $this->module->code() . '.view_own',
             savePermission: $this->module->code() . '.edit_own',
@@ -66,12 +78,7 @@ final readonly class RecordEditor implements
                 new EditorFieldDefinition(name: 'published_at', type: 'text', readOnly: false, permission: $this->module->code() . '.publish_own'),
                 new EditorFieldDefinition(name: 'author_name', type: 'text', readOnly: false, permission: null),
                 ...CmsDisplaySettings::fields(),
-                ...array_map(static fn(array $field): EditorFieldDefinition => new EditorFieldDefinition(
-                    'field_' . $field['id'],
-                    'text',
-                    false,
-                    null,
-                ), $this->values->scalarFields()),
+                ...$contentFields,
                 new EditorFieldDefinition(name: 'locale', type: 'text', readOnly: false, permission: null),
                 new EditorFieldDefinition(name: 'title', type: 'text', readOnly: false, permission: null),
                 new EditorFieldDefinition(name: 'page_title', type: 'text', readOnly: false, permission: null),
@@ -120,10 +127,6 @@ final readonly class RecordEditor implements
         if ($article === null) {
             throw new EditorEntityNotFoundException('Content record not found.');
         }
-        $article['translations'] = array_map(
-            static fn(array $translation): array => array_diff_key($translation, ['summary' => true, 'content' => true]),
-            $article['translations'],
-        );
 
         return ['article' => $article, 'locales' => $this->content->editorLocales($id)];
     }
@@ -154,6 +157,10 @@ final readonly class RecordEditor implements
         foreach ($this->values->scalarFields() as $field) {
             $schema->field('field_' . $field['id'], (string) $field['name']);
         }
+        foreach ($this->values->relationFields() as $field) {
+            $schema->field('field_' . $field['id'], (string) $field['name']);
+            $schema->field('field_' . $field['id'] . '_present');
+        }
         return $schema;
     }
 
@@ -167,7 +174,7 @@ final readonly class RecordEditor implements
             $this->service->save(
                 $actorId,
                 $id,
-                CmsContentInput::fromEditor(['summary' => null, 'content' => null] + $data),
+                CmsContentInput::fromEditor($data),
                 RecordData::fromEditor($data),
             );
         } catch (DefinitionValidationException $exception) {
@@ -176,7 +183,7 @@ final readonly class RecordEditor implements
             throw new EditorValidationException(
                 $exception->getMessage(),
                 previous: $exception,
-                errors: array_map($this->translator->get(...), $exception->errors()),
+                errors: array_map($this->translator->get(...), $exception->getErrors()),
             );
         } catch (DomainException $exception) {
             throw new EditorValidationException($exception->getMessage(), previous: $exception);
@@ -206,7 +213,7 @@ final readonly class RecordEditor implements
             throw new EditorValidationException(
                 $exception->getMessage(),
                 previous: $exception,
-                errors: array_map($this->translator->get(...), $exception->errors()),
+                errors: array_map($this->translator->get(...), $exception->getErrors()),
             );
         } catch (DomainException $exception) {
             throw new EditorValidationException($exception->getMessage(), previous: $exception);

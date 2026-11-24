@@ -4,30 +4,37 @@ declare(strict_types=1);
 
 namespace Lemonade\Cms\ContentTypes\Models;
 
-use InvalidArgumentException;
 use Lemonade\Admin\Cms\Content\CmsDataGridProjection;
 use Lemonade\Admin\DataGrid\Query\DataGridQuery;
 use Lemonade\Cms\ContentTypes\Field\FieldTypeRegistry;
 use Lemonade\Framework\Database\QueryBuilder;
 
+/**
+ * Applies Content Type field projections and filters to the Admin grid
+ */
 final readonly class RecordGridProjection implements CmsDataGridProjection
 {
-    public const FILTERS = [
-        'integer' => ['number', '/^-?(?:0|[1-9][0-9]{0,15})$/D'],
-        'decimal' => ['number', '/^-?(?:0|[1-9][0-9]{0,15})(?:\.[0-9]{1,8})?$/D'],
-        'date' => ['date', '/^[1-9][0-9]{3}-[0-9]{2}-[0-9]{2}$/D'],
-        'datetime' => ['datetime-local', '/^[1-9][0-9]{3}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$/D'],
-    ];
-
     /**
+     * Receives the fields and shared record query implementation
+     *
      * @param list<array<string,mixed>> $fields
      */
-    public function __construct(private array $fields, private FieldTypeRegistry $types) {}
+    public function __construct(
+        private array $fields,
+        private FieldTypeRegistry $types,
+        private RecordModel $records,
+    ) {}
 
     public function sorts(): array
     {
         $sorts = [];
         foreach ($this->fields as $field) {
+            if ($field['kind'] === 'relation') {
+                continue;
+            }
+            if ($this->types->get((string) $field['kind'])->storage() === null) {
+                continue;
+            }
             if ($field['kind'] !== 'richtext') {
                 $sorts['field_' . $field['id']] = 'field_' . (int) $field['id'];
             }
@@ -38,33 +45,27 @@ final readonly class RecordGridProjection implements CmsDataGridProjection
     public function apply(QueryBuilder $builder, DataGridQuery $query): QueryBuilder
     {
         foreach ($this->fields as $field) {
-            $id = (int) $field['id'];
-            $alias = 'fv' . $id;
-            $storage = $this->types->get((string) $field['kind'])->storage();
-            $localized = (int) $field['localized'] === 1;
-            $table = $localized ? 'cms_content_record_translation_value' : 'cms_content_record_value';
-            $condition = $alias . '.record_id = a.id AND ' . $alias . '.field_id = ' . $id . ($localized ? ' AND ' . $alias . '.translation_id = t.id' : '');
-            $subquery = 'SELECT ' . $alias . '.value_' . $storage . ' FROM ' . $table . ' ' . $alias . ' WHERE ' . $condition;
-            $builder = $builder->selectRaw('(' . $subquery . ') AS field_' . $id);
-            $filter = $query->filter('field_' . $id);
-            if ($filter === null) {
-                continue;
-            }
-            if (isset(self::FILTERS[$storage])) {
-                if (preg_match(self::FILTERS[$storage][1], $filter) !== 1) {
-                    throw new InvalidArgumentException('Invalid typed field filter.');
-                }
-                $builder = $builder->whereRaw('(' . $subquery . ') = ?', [$storage === 'datetime' ? str_replace('T', ' ', $filter) . ':00' : $filter]);
-            }
-            if ($storage === 'boolean' && in_array($filter, ['0', '1'], true)) {
-                $builder = $builder->whereRaw('(' . $subquery . ') = ?', [(int) $filter]);
-            }
-            if ($storage === 'option') {
-                foreach ($field['options'] as $option) {
-                    if ($option['code'] === $filter && $option['archived_at'] === null) {
-                        $builder = $builder->whereRaw('(' . $subquery . ') = ?', [(int) $option['id']]);
+            if ($field['kind'] === 'relation') {
+                $filter = $query->filter('field_' . $field['id']);
+                if ($filter !== null) {
+                    $targetId = filter_var($filter, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+                    if (is_int($targetId)) {
+                        $builder = $this->records->filterByRelation($builder, (int) $field['id'], $targetId);
+                    } else {
+                        $builder = $builder->whereRaw('1 = 0');
                     }
                 }
+                continue;
+            }
+            $storage = $this->types->get((string) $field['kind'])->storage();
+            if ($storage === null) {
+                continue;
+            }
+            $id = (int) $field['id'];
+            $builder = $builder->selectRaw('(' . $this->records->scalarFieldExpression($field) . ') AS field_' . $id);
+            $filter = $query->filter('field_' . $id);
+            if ($filter !== null) {
+                $builder = $this->records->filterByScalar($builder, $field, $filter);
             }
         }
         return $builder;

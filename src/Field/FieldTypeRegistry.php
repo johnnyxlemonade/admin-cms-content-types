@@ -12,6 +12,9 @@ use Lemonade\Admin\Editor\AdminEditor\Field\SelectField;
 use Lemonade\Admin\Presentation\AdminFileUsageDefinition;
 use LogicException;
 
+/**
+ * Resolves field kinds and their editor and storage behavior
+ */
 final readonly class FieldTypeRegistry
 {
     /** @var array<string,FieldTypeInterface> */
@@ -48,7 +51,7 @@ final readonly class FieldTypeRegistry
      */
     public function mediaDefinition(string $module, array $field): ?AdminFileUsageDefinition
     {
-        if ($this->get((string) $field['kind'])->storage() !== null || $field['archived_at'] !== null) {
+        if (!self::isMedia((string) $field['kind']) || $field['archived_at'] !== null) {
             return null;
         }
         $image = in_array($field['kind'], ['image', 'gallery'], true);
@@ -62,6 +65,14 @@ final readonly class FieldTypeRegistry
             sortable: $multiple,
             imageProfile: $image ? null : 'admin-image',
         );
+    }
+
+    /**
+     * Reports whether a field kind stores media through file usages
+     */
+    public static function isMedia(string $kind): bool
+    {
+        return in_array($kind, ['image', 'gallery', 'file', 'files'], true);
     }
 
     /**
@@ -109,32 +120,51 @@ final readonly class FieldTypeRegistry
     }
 
     /**
+     * Builds editor inspector controls for registered field kinds
+     *
+     * @param array<int|string,string> $relationTargets
      * @return array<string,list<AdminEditorFieldDefinition>>
      */
-    public function inspectors(): array
+    public function inspectors(array $relationTargets = []): array
     {
         $widths = range(1, 12);
         $widthOptions = array_combine($widths, array_map(static fn(int $span): string => $span . '/12', $widths));
         $inspectors = [];
         foreach ($this->types as $code => $type) {
             $scalar = $type->storage() !== null;
+            $relation = $code === 'relation';
             $controls = [
                 Field::text('name', labelKey: 'content-types.fields.name')->required()->attributes(['maxlength' => '180']),
                 Field::text('code', labelKey: 'content-types.fields.code')->help('', 'content-types.editor.code_help')->attributes(['maxlength' => '64']),
-                ...($scalar ? [
-                    Field::toggle('required', labelKey: 'content-types.fields.required'),
-                    Field::toggle('localized', labelKey: 'content-types.fields.localized'),
-                ] : []),
-                Field::textarea('help', labelKey: 'content-types.fields.help'),
-                ...array_values(array_filter($type->ruleControls())),
-                ...($scalar ? [$type->control('default_value', 'content-types.fields.default_value')] : []),
-                Field::text('css_class', labelKey: 'content-types.fields.css_class')->attributes(['maxlength' => '255']),
-                Field::text('html_id', labelKey: 'content-types.fields.html_id')->help('', 'content-types.editor.html_id_help')->attributes(['maxlength' => '128']),
-                Field::select('span', labelKey: 'content-types.fields.width')->options($widthOptions),
             ];
+            if ($scalar || $relation) {
+                $controls[] = Field::toggle('required', labelKey: 'content-types.fields.required');
+            }
+            if ($scalar) {
+                $controls[] = Field::toggle('localized', labelKey: 'content-types.fields.localized');
+            }
+            $controls[] = Field::textarea('help', labelKey: 'content-types.fields.help');
+            if ($relation) {
+                $controls[] = Field::select('relation_target_type_id', labelKey: 'content-types.fields.relation_target_type_id')->options($relationTargets)->required();
+                $controls[] = Field::toggle('relation_multiple', labelKey: 'content-types.fields.relation_multiple');
+            }
+            foreach ($type->ruleControls() as $control) {
+                if ($control !== null) {
+                    $controls[] = $control;
+                }
+            }
+            if ($scalar) {
+                $default = $type->control('default_value', 'content-types.fields.default_value');
+                if ($default !== null) {
+                    $controls[] = $default;
+                }
+            }
+            $controls[] = Field::text('css_class', labelKey: 'content-types.fields.css_class')->attributes(['maxlength' => '255']);
+            $controls[] = Field::text('html_id', labelKey: 'content-types.fields.html_id')->help('', 'content-types.editor.html_id_help')->attributes(['maxlength' => '128']);
+            $controls[] = Field::select('span', labelKey: 'content-types.fields.width')->options($widthOptions);
             $inspectors[$code] = array_map(
                 static fn(AdminEditorFieldDefinition $field): AdminEditorFieldDefinition => $field->helpKey($field->helpTranslationKey() ?? 'content-types.help.' . $field->name()),
-                array_values(array_filter($controls)),
+                $controls,
             );
         }
         return $inspectors;
@@ -201,6 +231,9 @@ final readonly class FieldTypeRegistry
     public function editorField(array $field): array
     {
         $field = $this->get((string) $field['kind'])->editorValues($field) + $field;
+        if ($field['kind'] !== 'relation') {
+            unset($field['relation_target_type_id'], $field['relation_multiple']);
+        }
         $field['id'] = (int) $field['id'];
         $field['key'] = 'f' . $field['id'];
         $field['archived'] = $field['archived_at'] !== null;

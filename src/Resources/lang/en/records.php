@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 return [
+    'relations' => ['move_earlier' => 'Move earlier', 'move_later' => 'Move later'],
     'module' => [
         'name' => 'Content records',
         'description' => 'Manage and publish content records.',

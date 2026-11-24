@@ -29,6 +29,9 @@ use Lemonade\Cms\ContentTypes\Field\FieldTypeRegistry;
 use Lemonade\Framework\Localization\TranslatorInterface;
 use Lemonade\Framework\Routing\UrlGenerator;
 
+/**
+ * Builds Admin index and editor pages for one Content Type
+ */
 final readonly class RecordPageProvider implements ModuleIndexPageProviderInterface, ModuleEditorPageProviderInterface
 {
     public function __construct(
@@ -147,6 +150,7 @@ final readonly class RecordPageProvider implements ModuleIndexPageProviderInterf
                     contentLocale: $selectedLocale['code'],
                     otherPublishedLocale: $otherPublishedLocale,
                     context: $context,
+                    oldInput: $input,
                 ),
                 'adminEditorContext' => new AdminEditorRenderContext(
                     values: $this->editorValues($article, $selectedLocale['code']),
@@ -162,13 +166,17 @@ final readonly class RecordPageProvider implements ModuleIndexPageProviderInterf
     }
 
     /**
+     * Builds the editor for the selected translation and submitted values
+     *
      * @param array<string,mixed> $article
+     * @param array<string,mixed> $oldInput
      */
     private function editorDefinition(
         array $article,
         string $contentLocale,
         bool $otherPublishedLocale,
         AdminEditorHeaderContextDefinition $context,
+        array $oldInput,
     ): AdminEditorDefinition {
         $ownerId = $article['owner_id'] === null ? null : (int) $article['owner_id'];
         $canAssignOwner = $this->authorization->hasPermission($this->module->code() . '.assign_owner')
@@ -233,6 +241,7 @@ final readonly class RecordPageProvider implements ModuleIndexPageProviderInterf
             tagOptions: $this->module->tagsEnabled()
                 ? $this->content->tagNamesForLocale($contentLocale)
                 : [],
+            oldInput: $oldInput,
         );
     }
 
@@ -256,7 +265,7 @@ final readonly class RecordPageProvider implements ModuleIndexPageProviderInterf
             'meta_description' => (string) ($translation['meta_description'] ?? ''),
             'url_segment' => $canonicalPath === '' ? '' : basename($canonicalPath),
             ...CmsDisplaySettings::values($article),
-            'publication_state' => $publicationState->editorValue(),
+            'publication_state' => $publicationState->getEditorValue(),
             'published_at' => (string) ($translation['published_at'] ?? ''),
             'created_by_name' => (string) ($article['created_by_name'] ?? '—'),
             'created_at' => (string) ($article['created_at'] ?? ''),

@@ -13,6 +13,7 @@ use Lemonade\Admin\Editor\EditorDispatcher;
 use Lemonade\Admin\Editor\EditorRegistry;
 use Lemonade\Admin\Localization\ClientTranslationGroupRegistry;
 use Lemonade\Admin\Page\ModulePageRegistry;
+use Lemonade\Admin\Routing\AdminRouteRegistrarRegistry;
 use Lemonade\Cms\ContentTypes\Actions\SetDeletedAction;
 use Lemonade\Cms\ContentTypes\Actions\SetEnabledAction;
 use Lemonade\Cms\ContentTypes\DataGrid\ContentTypesDataGrid;
@@ -27,13 +28,17 @@ use Lemonade\Cms\ContentTypes\Field\Types\FilesFieldType;
 use Lemonade\Cms\ContentTypes\Field\Types\GalleryFieldType;
 use Lemonade\Cms\ContentTypes\Field\Types\ImageFieldType;
 use Lemonade\Cms\ContentTypes\Field\Types\IntegerFieldType;
+use Lemonade\Cms\ContentTypes\Field\Types\RelationFieldType;
 use Lemonade\Cms\ContentTypes\Field\Types\RichTextFieldType;
 use Lemonade\Cms\ContentTypes\Field\Types\SelectFieldType;
 use Lemonade\Cms\ContentTypes\Field\Types\TextareaFieldType;
 use Lemonade\Cms\ContentTypes\Field\Types\TextFieldType;
 use Lemonade\Cms\ContentTypes\Models\ContentTypeModel;
+use Lemonade\Cms\ContentTypes\Public\PublishedRecordReadModel;
 use Lemonade\Cms\ContentTypes\Record\RecordProviderFactory;
 use Lemonade\Cms\ContentTypes\Record\RecordRegistration;
+use Lemonade\Cms\ContentTypes\Record\RelationOptionsController;
+use Lemonade\Cms\ContentTypes\Record\RelationOptionsRouteRegistrar;
 use Lemonade\Framework\Container\ContainerBuilderInterface;
 use Lemonade\Framework\Container\ContainerInterface;
 use Lemonade\Framework\Core\BootableServiceProviderInterface;
@@ -41,11 +46,17 @@ use Lemonade\Framework\Core\ServiceProviderInterface;
 use Lemonade\Framework\Localization\TranslationResourceRegistry;
 use Lemonade\Framework\View\ViewResourceRegistry;
 
+/**
+ * Registers Content Types services and runtime integrations
+ */
 final readonly class CmsContentTypesServiceProvider implements ServiceProviderInterface, BootableServiceProviderInterface
 {
     public function register(ContainerBuilderInterface $container): void
     {
         $container->scoped(RecordProviderFactory::class, static fn(ContainerInterface $scope): RecordProviderFactory => new RecordProviderFactory($scope));
+        $container->scoped(RelationOptionsController::class, RelationOptionsController::class);
+        $container->scoped(PublishedRecordReadModel::class, PublishedRecordReadModel::class);
+        $container->singleton(RelationOptionsRouteRegistrar::class, RelationOptionsRouteRegistrar::class);
         $container->singleton(FieldTypeRegistry::class, static fn(): FieldTypeRegistry => new FieldTypeRegistry([
             new TextFieldType(),
             new TextareaFieldType(),
@@ -60,6 +71,7 @@ final readonly class CmsContentTypesServiceProvider implements ServiceProviderIn
             new GalleryFieldType(),
             new FileFieldType(),
             new FilesFieldType(),
+            new RelationFieldType(),
 
         ]));
         $container->scoped('content-types.create', static fn(ContainerInterface $container): StandardEditorAction => StandardEditorAction::create($container->get(EditorDispatcher::class), ModuleManifest::CODE));
@@ -78,6 +90,7 @@ final readonly class CmsContentTypesServiceProvider implements ServiceProviderIn
     {
         $container->get(TranslationResourceRegistry::class)->register(__DIR__ . '/Resources/lang', ModuleManifest::CODE);
         $container->get(ViewResourceRegistry::class)->register('content-types', __DIR__ . '/Resources/views');
+        $container->get(AdminRouteRegistrarRegistry::class)->register($container->get(RelationOptionsRouteRegistrar::class));
         $container->get(EditorRegistry::class)->register(ModuleManifest::CODE, ContentTypesEditor::class);
         $container->get(ModulePageRegistry::class)->registerEditor(ModuleManifest::CODE, ContentTypesModulePageProvider::class);
         foreach (['create', 'save'] as $action) {

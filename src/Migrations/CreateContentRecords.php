@@ -9,6 +9,9 @@ use Lemonade\Framework\Database\Migration\MigrationInterface;
 use Lemonade\Framework\Database\Schema\Blueprint\TableBlueprint;
 use Lemonade\Framework\Database\Schema\Schema;
 
+/**
+ * Creates record tables without system body columns for Content Types
+ */
 final readonly class CreateContentRecords implements MigrationInterface
 {
     public static function identifier(): string
@@ -33,7 +36,7 @@ final readonly class CreateContentRecords implements MigrationInterface
             $table->foreign('type_id', 'fk_cms_record_type')->references('id')->on('cms_content_type')->restrictOnDelete()->restrictOnUpdate();
         });
         $schema->create('cms_content_record_translation', static function (TableBlueprint $table): void {
-            CmsContentSchema::translation($table, 'cms_content_record', 'record_id');
+            CmsContentSchema::translation($table, 'cms_content_record', 'record_id', hasBodyColumns: false);
             $table->unique(['id', 'record_id'], 'uq_cms_record_translation_identity');
         });
         $schema->create('cms_content_record_translation_tag', static function (TableBlueprint $table): void {

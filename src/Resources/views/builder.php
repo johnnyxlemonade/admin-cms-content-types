@@ -24,7 +24,7 @@ $kinds = [];
 foreach (array_keys($inspectors) as $kind) {
     $kinds[$kind] = $helpers->lang('content-types.kinds.' . $kind);
 }
-$icons = ['image' => 'image', 'gallery' => 'images', 'file' => 'file-earmark', 'files' => 'files', 'text' => 'type', 'textarea' => 'text-left', 'richtext' => 'paragraph', 'integer' => '123', 'decimal' => '123', 'boolean' => 'toggle-on', 'date' => 'calendar3', 'datetime' => 'calendar-week', 'select' => 'card-list'];
+$icons = ['image' => 'image', 'gallery' => 'images', 'file' => 'file-earmark', 'files' => 'files', 'text' => 'type', 'textarea' => 'text-left', 'richtext' => 'paragraph', 'integer' => '123', 'decimal' => '123', 'boolean' => 'toggle-on', 'date' => 'calendar3', 'datetime' => 'calendar-week', 'select' => 'card-list', 'relation' => 'link-45deg'];
 ?>
 <div class="lm-field-builder" data-lemonade-field-builder data-input="definition" data-name-input="name" data-code-input="code" data-translation-prefix="content-types" data-labels="<?= e(json_encode($labels, JSON_THROW_ON_ERROR)) ?>" data-kinds="<?= e(json_encode($kinds, JSON_THROW_ON_ERROR)) ?>" data-icons="<?= e(json_encode($icons, JSON_THROW_ON_ERROR)) ?>">
     <div class="lm-field-builder-columns">
@@ -77,7 +77,7 @@ $icons = ['image' => 'image', 'gallery' => 'images', 'file' => 'file-earmark', '
             $groups = ['properties' => [], 'validation' => [], 'display' => [], 'advanced' => []];
         foreach ($fields as $field) {
             $group = match ($field->name()) {
-                'name', 'required', 'localized', 'help' => 'properties',
+                'name', 'required', 'localized', 'help', 'relation_target_type_id', 'relation_multiple' => 'properties',
                 'default_value', 'span' => 'display',
                 'code', 'css_class', 'html_id' => 'advanced',
                 default => 'validation',

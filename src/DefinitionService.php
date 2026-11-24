@@ -20,6 +20,9 @@ use Lemonade\Cms\ContentTypes\Record\RecordModule;
 use Lemonade\Framework\Database\Exception\DatabaseException;
 use Lemonade\Framework\Http\HttpStatus;
 
+/**
+ * Validates and saves Content Type definitions with audit events
+ */
 final readonly class DefinitionService
 {
     public function __construct(
@@ -61,6 +64,8 @@ final readonly class DefinitionService
     }
 
     /**
+     * Saves a definition while preserving existing field and relation data
+     *
      * @param array<string,mixed> $input
      */
     public function save(?int $id, array $input): int
@@ -88,6 +93,25 @@ final readonly class DefinitionService
                 $prepared = $this->validation->prepare($definition, $storedFields, $storedRows);
                 $storedById = array_column($storedFields, null, 'id');
                 foreach ($prepared as $field) {
+                    if ($field['values']['kind'] === 'relation') {
+                        $fieldId = $field['id'];
+                        $previous = $fieldId === null ? null : $storedById[$fieldId];
+                        $targetTypeId = (int) $field['values']['relation_target_type_id'];
+                        $sameTarget = $previous !== null && (int) $previous['relation_target_type_id'] === $targetTypeId;
+                        if ($this->model->type($targetTypeId, includeDeleted: $sameTarget) === null) {
+                            $this->validation->fail('definition', 'relation_target_type');
+                        }
+                        if ($fieldId !== null && $this->model->fieldHasRelationValues($fieldId)) {
+                            if (!$sameTarget) {
+                                $this->validation->fail('definition', 'relation_in_use');
+                            }
+                            $wasMultiple = (int) $previous['relation_multiple'] === 1;
+                            $willBeSingle = (int) $field['values']['relation_multiple'] === 0;
+                            if ($wasMultiple && $willBeSingle && $this->model->fieldHasMultipleRelations($fieldId)) {
+                                $this->validation->fail('definition', 'relation_in_use');
+                            }
+                        }
+                    }
                     if ($field['id'] !== null
                         && (int) $storedById[$field['id']]['localized'] !== (int) $field['values']['localized']
                         && $this->model->fieldHasValues($field['id'])) {

@@ -9,6 +9,25 @@ use PHPUnit\Framework\Attributes\DataProvider;
 
 final class DefinitionValidationTest extends DefinitionTestCase
 {
+    public function testRelationDefinitionUsesRootIdentityAndRejectsLocalizedOrInvalidTargets(): void
+    {
+        $input = ['name' => 'Workplace', 'code' => 'workplace', 'kind' => 'relation', 'sort_order' => 0, 'relation_target_type_id' => '42', 'relation_multiple' => '1', 'required' => '1'];
+        $values = $this->validation()->field($input)['values'];
+        self::assertSame(42, $values['relation_target_type_id']);
+        self::assertSame(1, $values['relation_multiple']);
+        self::assertSame(1, $values['required']);
+        self::assertSame(0, $values['localized']);
+
+        foreach ([['localized' => '1'], ['relation_target_type_id' => '0'], ['relation_target_type_id' => 'wrong'], ['default_value' => '42']] as $invalid) {
+            try {
+                $this->validation()->field($invalid + $input);
+                self::fail('Invalid relation definition accepted.');
+            } catch (DefinitionValidationException) {
+                // Invalid input must be rejected before the definition is saved.
+            }
+        }
+    }
+
     public function testSystemMediaDefaultsAndIndependentValues(): void
     {
         $base = ['name' => 'Type', 'description' => 'Description'];

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 return [
+    'relations' => ['move_earlier' => 'Posunout výše', 'move_later' => 'Posunout níže'],
     'module' => [
         'name' => 'Obsahové záznamy',
         'description' => 'Správa obsahových záznamů a jejich publikace.',

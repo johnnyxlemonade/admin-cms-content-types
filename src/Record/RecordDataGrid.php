@@ -29,9 +29,13 @@ use Lemonade\Cms\CmsPublicationState;
 use Lemonade\Cms\Content\CmsContentReadModel;
 use Lemonade\Cms\ContentTypes\Field\FieldTypeRegistry;
 use Lemonade\Cms\ContentTypes\Models\RecordGridProjection;
+use Lemonade\Cms\ContentTypes\Models\RecordModel;
 use Lemonade\Framework\Localization\TranslatorInterface;
 use Lemonade\Framework\Routing\UrlGenerator;
 
+/**
+ * Provides the Admin grid for records of one Content Type
+ */
 final readonly class RecordDataGrid implements DataGridProviderInterface
 {
     public function __construct(
@@ -46,6 +50,7 @@ final readonly class RecordDataGrid implements DataGridProviderInterface
         private UrlGenerator $urls,
         private LanguageRegistry $languages,
         private CmsContentDataGrid $contentGrid,
+        private RecordModel $records,
     ) {}
 
     public function permission(): string
@@ -119,21 +124,55 @@ final readonly class RecordDataGrid implements DataGridProviderInterface
         if (!$canViewAll && $ownerId === null) {
             return new DataGridResult([], $query->page(), $query->pageSize(), 0);
         }
+        foreach ($this->values->relationFields() as $field) {
+            $filter = $query->filter('field_' . $field['id']);
+            if ($filter === null) {
+                continue;
+            }
+            $targetId = filter_var($filter, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            if (!is_int($targetId)) {
+                return new DataGridResult([], $query->page(), $query->pageSize(), 0);
+            }
+            $targetTypeId = (int) $field['relation_target_type_id'];
+            $targets = $this->records->relationTargets($targetTypeId, [$targetId]);
+            $target = $targets[$targetId] ?? null;
+            if ($target === null) {
+                return new DataGridResult([], $query->page(), $query->pageSize(), 0);
+            }
+            $targetOwnerId = $target['owner_id'] === null ? null : (int) $target['owner_id'];
+            $targetModule = 'cms.type_' . $targetTypeId;
+            if (!$this->authorization->canForOwner($targetModule . '.view', $targetModule . '.view_own', $targetOwnerId)) {
+                return new DataGridResult([], $query->page(), $query->pageSize(), 0);
+            }
+        }
         $page = $this->contentGrid->listForDataGrid(
             $query,
             $this->languages->defaultLocale(),
             $ownerId,
-            projection: new RecordGridProjection($this->values->scalarFields(), $this->types),
+            projection: new RecordGridProjection($this->gridFields(), $this->types, $this->records),
         );
-        $rows = array_map($this->row(...), $page->items());
+        $records = $page->items();
+        $ids = [];
+        foreach ($records as $record) {
+            $ids[] = (int) $record['id'];
+        }
+        $locale = $query->filter('locale') ?? $this->languages->defaultLocale();
+        $relations = $this->values->relationOptionsForRecords($ids, $locale);
+        $rows = [];
+        foreach ($records as $record) {
+            $rows[] = $this->row($record, $relations[(int) $record['id']] ?? []);
+        }
 
         return new DataGridResult($rows, $page->page(), $page->perPage(), $page->total());
     }
 
     /**
+     * Builds one grid row with authorized relation labels
+     *
      * @param array<string,mixed> $article
+     * @param array<int,array<int,string>> $relations
      */
-    private function row(array $article): DataGridRowDefinition
+    private function row(array $article, array $relations): DataGridRowDefinition
     {
         $articleId = (int) $article['id'];
         $locale = (string) $article['locale'];
@@ -152,7 +191,7 @@ final readonly class RecordDataGrid implements DataGridProviderInterface
         return new DataGridRowDefinition(
             id: $articleId,
             cells: [
-                ...$this->customCells($article),
+                ...$this->customCells($article, $relations),
                 'title' => new StackedCell(
                     value: $displayTitle,
                     secondary: (string) ($article['canonical_path'] ?? ''),
@@ -270,11 +309,11 @@ final readonly class RecordDataGrid implements DataGridProviderInterface
         return array_map(static fn(array $field): DataGridColumnDefinition => new DataGridColumnDefinition(
             'field_' . $field['id'],
             '',
-            $field['kind'] === 'richtext' ? null : 'field_' . $field['id'],
+            in_array($field['kind'], ['richtext', 'relation'], true) ? null : 'field_' . $field['id'],
             configurable: true,
             visibleByDefault: false,
             label: (string) $field['name'],
-        ), $this->values->scalarFields());
+        ), $this->gridFields());
     }
 
     /**
@@ -283,7 +322,21 @@ final readonly class RecordDataGrid implements DataGridProviderInterface
     private function customFilters(): array
     {
         $filters = [];
-        foreach ($this->values->scalarFields() as $field) {
+        foreach ($this->gridFields() as $field) {
+            if ($field['kind'] === 'relation') {
+                $filters[] = new DataGridFilterDefinition(
+                    'field_' . $field['id'],
+                    new StaticSelectOptionSource([]),
+                    label: (string) $field['name'],
+                    allLabelKey: 'records.filters.all_values',
+                    valuePattern: '/^[1-9][0-9]{0,18}$/D',
+                    asyncUrl: $this->urls->route('admin.cms.content-types.relation-options', [
+                        'field' => $field['id'],
+                        'locale' => $this->translator->locale() ?? $this->languages->defaultLocale(),
+                    ]),
+                );
+                continue;
+            }
             $storage = $this->types->get((string) $field['kind'])->storage();
             $options = [];
             if ($storage === 'boolean') {
@@ -297,8 +350,8 @@ final readonly class RecordDataGrid implements DataGridProviderInterface
                     }
                 }
             }
-            if (isset(RecordGridProjection::FILTERS[$storage])) {
-                [$inputType, $pattern] = RecordGridProjection::FILTERS[$storage];
+            if (isset(RecordModel::FILTERS[$storage])) {
+                [$inputType, $pattern] = RecordModel::FILTERS[$storage];
                 $filters[] = new DataGridFilterDefinition(
                     'field_' . $field['id'],
                     new StaticSelectOptionSource([]),
@@ -320,12 +373,20 @@ final readonly class RecordDataGrid implements DataGridProviderInterface
     }
 
     /**
+     * Renders configured scalar and relation cells for one row
+     *
      * @param array<string,mixed> $row
+     * @param array<int,array<int,string>> $relations
      * @return array<string,ScalarCell>
      */
-    private function customCells(array $row): array
+    private function customCells(array $row, array $relations): array
     {
         $cells = [];
+        foreach ($this->values->relationFields() as $field) {
+            $fieldId = (int) $field['id'];
+            $labels = array_values($relations[$fieldId] ?? []);
+            $cells['field_' . $fieldId] = new ScalarCell($labels === [] ? '—' : implode(', ', $labels));
+        }
         foreach ($this->values->scalarFields() as $field) {
             $key = 'field_' . $field['id'];
             $value = $row[$key] ?? null;
@@ -338,5 +399,19 @@ final readonly class RecordDataGrid implements DataGridProviderInterface
             $cells[$key] = new ScalarCell($value === null ? '—' : strip_tags((string) $value));
         }
         return $cells;
+    }
+
+    /**
+     * Returns active fields supported by grid projection
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function gridFields(): array
+    {
+        return array_values(array_filter(
+            $this->values->activeFields(),
+            fn(array $field): bool => $field['kind'] === 'relation'
+                || $this->types->get((string) $field['kind'])->storage() !== null,
+        ));
     }
 }

@@ -123,6 +123,7 @@ final readonly class RecordModule implements AdminModuleDefinitionInterface, Adm
             validationPrefix: 'records',
             dataClass: RecordData::class,
             rootScope: ['type_id' => $this->id],
+            hasBodyColumns: false,
             routePrefixes: $this->routePrefixes,
         );
     }

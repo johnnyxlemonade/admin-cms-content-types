@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Lemonade\Cms\ContentTypes\Tests\Unit;
 
+use Lemonade\Admin\Authorization\AuthorizationService;
+use Lemonade\Admin\Authorization\CurrentPrincipalProviderInterface;
 use Lemonade\Admin\Editor\AdminEditor\Field\AdminEditorInputFieldDefinition;
 use Lemonade\Admin\Editor\AdminEditor\Layout\CustomViewBlock;
 use Lemonade\Admin\Editor\AdminEditor\Layout\FieldGroupBlock;
@@ -344,6 +346,13 @@ final class RecordValuesTest extends DefinitionTestCase
             return $result;
         });
         $database = new Database(self::createStub(ConnectionInterface::class), $driver);
-        return new RecordValues(new RecordModule(1, 'Type', 'type', true), new DefinitionModel($database), new RecordModel($database, $types), $types, $validation);
+        return new RecordValues(
+            new RecordModule(1, 'Type', 'type', true),
+            new DefinitionModel($database),
+            new RecordModel($database, $types),
+            $types,
+            $validation,
+            new AuthorizationService(self::createStub(CurrentPrincipalProviderInterface::class), $database),
+        );
     }
 }

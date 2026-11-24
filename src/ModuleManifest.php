@@ -12,6 +12,7 @@ use Lemonade\Admin\Module\AdminNavigationGroup;
 use Lemonade\Admin\Module\Contract\AdminModuleDefinitionInterface;
 use Lemonade\Admin\Modules\Manifest\ModuleManifestInterface;
 use Lemonade\Admin\Modules\Migration\ModuleMigrationManifestInterface;
+use Lemonade\Cms\ContentTypes\Migrations\AddContentRecordRelations;
 use Lemonade\Cms\ContentTypes\Migrations\AddContentTypeSystemMedia;
 use Lemonade\Cms\ContentTypes\Migrations\AddContentTypeTagsAndRoutePrefixes;
 use Lemonade\Cms\ContentTypes\Migrations\AddContentTypeThumbnail;
@@ -20,6 +21,9 @@ use Lemonade\Cms\ContentTypes\Migrations\CreateContentRecords;
 use Lemonade\Cms\ContentTypes\Migrations\CreateContentTypes;
 use Lemonade\Framework\Database\Migration\MigrationInterface;
 
+/**
+ * Declares Content Types runtime, Admin metadata and migrations
+ */
 final readonly class ModuleManifest implements ModuleManifestInterface, ModuleMigrationManifestInterface, AdminModuleDefinitionInterface
 {
     public const string CODE = 'cms.content-types';
@@ -51,6 +55,7 @@ final readonly class ModuleManifest implements ModuleManifestInterface, ModuleMi
             AddContentTypeSystemMedia::class,
             AddContentTypeThumbnail::class,
             AddContentTypeTagsAndRoutePrefixes::class,
+            AddContentRecordRelations::class,
         ];
     }
 

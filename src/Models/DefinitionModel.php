@@ -6,9 +6,28 @@ namespace Lemonade\Cms\ContentTypes\Models;
 
 use Lemonade\Framework\Database\Database;
 
+/**
+ * Reads and persists Content Type and field definitions
+ */
 final readonly class DefinitionModel
 {
     public function __construct(private Database $database) {}
+
+    /**
+     * Returns target type labels for relation field configuration
+     *
+     * @return array<int,string>
+     */
+    public function relationTargetOptions(): array
+    {
+        $query = $this->database->table('cms_content_type')->select(['id', 'name', 'deleted_at'])->orderBy('name');
+        $options = [];
+        foreach ($query->getArray() as $type) {
+            $name = (string) $type['name'];
+            $options[(int) $type['id']] = $type['deleted_at'] === null ? $name : $name . ' (deleted)';
+        }
+        return $options;
+    }
 
     /**
      * @return array<string,mixed>|null
@@ -50,6 +69,16 @@ final readonly class DefinitionModel
         unset($field);
 
         return $fields;
+    }
+
+    /**
+     * Finds an active relation field by its internal identifier
+     *
+     * @return array<string,mixed>|null
+     */
+    public function relationField(int $fieldId): ?array
+    {
+        return $this->database->table('cms_content_field')->where('id', $fieldId)->where('kind', 'relation')->where('archived_at', null)->first();
     }
 
     /**
@@ -190,5 +219,28 @@ final readonly class DefinitionModel
             }
         }
         return false;
+    }
+
+    /**
+     * Checks whether any stored link uses the field
+     */
+    public function fieldHasRelationValues(int $fieldId): bool
+    {
+        return $this->database->tableExists('cms_content_record_relation')
+            && $this->database->table('cms_content_record_relation')->where('field_id', $fieldId)->exists();
+    }
+
+    /**
+     * Checks whether reducing the relation to one target would lose links
+     */
+    public function fieldHasMultipleRelations(int $fieldId): bool
+    {
+        if (!$this->database->tableExists('cms_content_record_relation')) {
+            return false;
+        }
+        return $this->database->select(
+            'SELECT source_record_id FROM cms_content_record_relation WHERE field_id = ? GROUP BY source_record_id HAVING COUNT(*) > 1 LIMIT 1',
+            [$fieldId],
+        ) !== [];
     }
 }

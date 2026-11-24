@@ -9,12 +9,12 @@ use Lemonade\Cms\ContentTypes\Field\FieldTypeRegistry;
 use UnexpectedValueException;
 
 /**
- * Preklada ulozenou hodnotu pole bez aplikace editorovych defaults
+ * Interprets a stored field value without editor defaults
  */
 final readonly class RecordFieldValue
 {
     /**
-     * Nastavuje identitu definice a normalizovanou hodnotu
+     * Creates a normalized value with its field identity
      */
     private function __construct(
         private int $id,
@@ -26,55 +26,55 @@ final readonly class RecordFieldValue
     ) {}
 
     /**
-     * Vrati stabilni ID pole
+     * Returns the stable field identifier
      */
-    public function id(): int
+    public function getId(): int
     {
         return $this->id;
     }
 
     /**
-     * Vrati kod pole
+     * Returns the field code
      */
-    public function code(): string
+    public function getCode(): string
     {
         return $this->code;
     }
 
     /**
-     * Vrati popisek pole
+     * Returns the field label
      */
-    public function label(): string
+    public function getLabel(): string
     {
         return $this->label;
     }
 
     /**
-     * Vrati druh pole
+     * Returns the field kind
      */
-    public function kind(): string
+    public function getKind(): string
     {
         return $this->kind;
     }
 
     /**
-     * Vrati typovanou ulozenou hodnotu
+     * Returns the typed stored value
      */
-    public function value(): int|string|bool|DateTimeImmutable|null
+    public function getValue(): int|string|bool|DateTimeImmutable|null
     {
         return $this->value;
     }
 
     /**
-     * Vrati popisek ulozene select volby
+     * Returns the label of the stored select option
      */
-    public function optionLabel(): ?string
+    public function getOptionLabel(): ?string
     {
         return $this->optionLabel;
     }
 
     /**
-     * Interpretuje ulozenou hodnotu podle definice vcetne historicke select volby
+     * Interprets a stored value using its field definition and historical options
      *
      * @param array<string,mixed> $field
      */
@@ -112,16 +112,16 @@ final readonly class RecordFieldValue
     }
 
     /**
-     * Vrati stabilni usage pouze pro medialni pole
+     * Returns the stable file usage for a media field
      */
-    public function mediaUsage(): ?string
+    public function getMediaUsage(): ?string
     {
-        return in_array($this->kind, ['image', 'gallery', 'file', 'files'], true)
+        return FieldTypeRegistry::isMedia($this->kind)
             ? FieldTypeRegistry::mediaUsage($this->id) : null;
     }
 
     /**
-     * Odmitne neplatne datum bez tiche normalizace
+     * Rejects an invalid stored date without normalization
      */
     private static function date(string $value, string $kind): DateTimeImmutable
     {

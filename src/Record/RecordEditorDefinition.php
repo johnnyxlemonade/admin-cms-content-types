@@ -51,6 +51,7 @@ final readonly class RecordEditorDefinition
      * @param array<int,string> $ownerOptions
      * @param array<int,AdminFileUploadCollection> $mediaUploads
      * @param list<string> $tagOptions
+     * @param array<string,mixed> $oldInput
      */
     public function create(
         array $article,
@@ -65,6 +66,7 @@ final readonly class RecordEditorDefinition
         ?AdminFileUploadCollection $attachmentUpload = null,
         ?AdminFileUploadCollection $thumbnailUpload = null,
         array $tagOptions = [],
+        array $oldInput = [],
     ): AdminEditorDefinition {
         $segment = $this->module->segment();
         $params = ['module' => $segment, 'id' => (int) $article['id'], 'locale' => $contentLocale];
@@ -104,10 +106,13 @@ final readonly class RecordEditorDefinition
             new FieldGroupBlock($contentColumns),
         ];
         $contentFields = $this->contentFields(
+            articleId: (int) $article['id'],
+            locale: $contentLocale,
             publicationState: $publicationState,
             canPublish: $canPublish,
             otherPublishedLocale: $otherPublishedLocale,
             mediaUploads: $mediaUploads,
+            oldInput: $oldInput,
         );
         if ($contentFields !== null) {
             $contentBlocks[] = $contentFields;
@@ -162,16 +167,61 @@ final readonly class RecordEditorDefinition
 
     /**
      * @param array<int,AdminFileUploadCollection> $mediaUploads
+     * @param array<string,mixed> $oldInput
      */
     private function contentFields(
+        int $articleId,
+        string $locale,
         int $publicationState,
         bool $canPublish,
         bool $otherPublishedLocale,
         array $mediaUploads,
+        array $oldInput,
     ): ?SectionBlock {
         $rows = [];
+        $presenceFields = [];
+        $relationOptions = $this->values->relationOptionsWithInput($articleId, $locale, $oldInput);
         foreach ($this->values->activeFields() as $definition) {
-            if ($this->types->get((string) $definition['kind'])->storage() === null) {
+            if ($definition['kind'] === 'relation') {
+                $fieldId = (int) $definition['id'];
+                $multiple = (int) $definition['relation_multiple'] === 1;
+                $required = (int) $definition['required'] === 1;
+                $options = $relationOptions[$fieldId] ?? [];
+                $attributes = [
+                    'data-lemonade-select' => true,
+                    'data-lemonade-option-source' => 'async',
+                    'data-lemonade-source' => $this->urls->route('admin.cms.content-types.relation-options', [
+                        'field' => $fieldId, 'locale' => $locale, 'source' => $articleId,
+                    ]),
+                    'data-lemonade-min-length' => '0',
+                    'id' => (string) ($definition['html_id'] ?? 'field-' . $definition['code']),
+                ];
+                if ($multiple) {
+                    $attributes['data-lemonade-ordered'] = true;
+                } else {
+                    $attributes['data-lemonade-clearable'] = true;
+                    $options = ['' => ''] + $options;
+                }
+                if (($definition['css_class'] ?? '') !== '') {
+                    $attributes['class'] = (string) $definition['css_class'];
+                }
+                if ($required) {
+                    $attributes += CmsPublicationSection::requiredAttributes(
+                        state: $publicationState,
+                        canPublish: $canPublish,
+                        globallyRequired: $otherPublishedLocale,
+                        messageKey: 'content-types.validation.required',
+                    );
+                }
+                $field = Field::select('field_' . $fieldId, (string) $definition['name'])
+                    ->help((string) ($definition['help'] ?? ''))
+                    ->options($options)
+                    ->optionLabelKeys(['' => 'records.fields.empty_value'])
+                    ->multiple($multiple)
+                    ->required($required)
+                    ->attributes($attributes);
+                $presenceFields[] = Field::hidden('field_' . $fieldId . '_present')->defaultValue('1');
+            } elseif (FieldTypeRegistry::isMedia((string) $definition['kind'])) {
                 $field = new CustomViewBlock('content-types::media-field', [
                     'definition' => $definition,
                     'uploadCollection' => $mediaUploads[(int) $definition['id']] ?? null,
@@ -199,7 +249,7 @@ final readonly class RecordEditorDefinition
 
         return new SectionBlock(
             id: 'content-fields',
-            blocks: array_map(static fn(array $columns): FieldGroupBlock => new FieldGroupBlock($columns), array_values($rows)),
+            blocks: [...$presenceFields, ...array_map(static fn(array $columns): FieldGroupBlock => new FieldGroupBlock($columns), array_values($rows))],
             descriptionKey: 'records.editor.required_for_publication',
         );
     }
