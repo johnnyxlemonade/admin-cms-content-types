@@ -129,9 +129,24 @@ final readonly class DefinitionModel
      */
     public function createType(array $values): int
     {
+        if (!array_key_exists('sort_order', $values)) {
+            $values['sort_order'] = $this->nextSortOrder();
+        }
         $this->database->table('cms_content_type')->insert($values + ['created_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]);
 
         return (int) $this->database->lastInsertId();
+    }
+
+    /**
+     * Returns the next position after all current Content Types
+     */
+    public function nextSortOrder(): int
+    {
+        $row = $this->database->table('cms_content_type')
+            ->selectRaw('MAX(sort_order) AS max_sort_order')
+            ->first();
+
+        return (int) ($row['max_sort_order'] ?? -1) + 1;
     }
 
     /**

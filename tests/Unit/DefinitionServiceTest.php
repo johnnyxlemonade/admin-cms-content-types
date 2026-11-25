@@ -82,6 +82,26 @@ final class DefinitionServiceTest extends DefinitionTestCase
         ));
     }
 
+    /**
+     * Persists menu order with the system definition values
+     */
+    public function testMenuOrderIsSavedAsDefinitionProperty(): void
+    {
+        $input = $this->input(true);
+        $input['sort_order'] = 12;
+
+        $this->service(true, true)->save(7, $input);
+
+        $typeWrites = array_values(array_filter(
+            $this->writes,
+            static fn(array $write): bool => str_starts_with($write['sql'], 'UPDATE cms_content_type SET'),
+        ));
+        self::assertCount(1, $typeWrites);
+        self::assertStringContainsString('sort_order = ?', $typeWrites[0]['sql']);
+        self::assertIsArray($typeWrites[0]['bindings']);
+        self::assertContains(12, $typeWrites[0]['bindings']);
+    }
+
     public function testUpdateKeepsIdentitiesAndAllowsLabelsHelpAndOrder(): void
     {
         $service = $this->service(true, true);
@@ -313,7 +333,7 @@ final class DefinitionServiceTest extends DefinitionTestCase
         }
     }
 
-    /** @return array{name:string,code:string,enabled:int,revision:int,definition:string} */
+    /** @return array{name:string,code:string,description:string,sort_order:int,enabled:int,revision:int,definition:string} */
     private function input(bool $existing = false): array
     {
         $field = ['key' => 'f8', 'name' => 'Field', 'code' => 'field', 'kind' => 'text'];
@@ -323,7 +343,7 @@ final class DefinitionServiceTest extends DefinitionTestCase
             $row['id'] = 9;
         }
 
-        return ['name' => 'Type', 'code' => 'type', 'description' => 'Test content type', 'enabled' => 1, 'revision' => 1, 'definition' => json_encode(['fields' => [$field], 'rows' => [$row]], JSON_THROW_ON_ERROR)];
+        return ['name' => 'Type', 'code' => 'type', 'description' => 'Test content type', 'sort_order' => 3, 'enabled' => 1, 'revision' => 1, 'definition' => json_encode(['fields' => [$field], 'rows' => [$row]], JSON_THROW_ON_ERROR)];
     }
 
     private function service(bool $allowed = true, bool $existing = false, bool $enabled = true, bool $deleted = false): DefinitionService
@@ -337,7 +357,7 @@ final class DefinitionServiceTest extends DefinitionTestCase
                 $this->writes[] = ['sql' => $sql, 'bindings' => $bindings];
             } elseif ($existing) {
                 if (str_contains($sql, 'FROM cms_content_type')) {
-                    $rows = [['id' => 7, 'code' => 'type', 'name' => 'Type', 'revision' => 1, 'enabled' => (int) $enabled, 'deleted_at' => $deleted ? '2026-11-06 12:00:00' : null]];
+                    $rows = [['id' => 7, 'code' => 'type', 'name' => 'Type', 'sort_order' => 3, 'revision' => 1, 'enabled' => (int) $enabled, 'deleted_at' => $deleted ? '2026-11-06 12:00:00' : null]];
                     if ($deleted && str_contains($sql, 'deleted_at IS NULL')) {
                         $rows = [];
                     }

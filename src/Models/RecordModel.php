@@ -48,7 +48,16 @@ final readonly class RecordModel
             }
         }
 
-        return array_map(static fn(array $row): RecordModule => new RecordModule(
+        $types = $this->database->table('cms_content_type')->orderBy('id', 'ASC')->getArray();
+        usort($types, static fn(array $left, array $right): int => [
+            (int) ($left['sort_order'] ?? 0),
+            (int) $left['id'],
+        ] <=> [
+            (int) ($right['sort_order'] ?? 0),
+            (int) $right['id'],
+        ]);
+
+        return array_map(static fn(array $row, int $position): RecordModule => new RecordModule(
             id: (int) $row['id'],
             name: (string) $row['name'],
             typeCode: (string) $row['code'],
@@ -59,7 +68,8 @@ final readonly class RecordModel
             thumbnailEnabled: (int) ($row['thumbnail_enabled'] ?? 0) === 1,
             tagsEnabled: (int) ($row['tags_enabled'] ?? 0) === 1,
             routePrefixes: $routePrefixes[(int) $row['id']] ?? [],
-        ), $this->database->table('cms_content_type')->orderBy('id')->getArray());
+            navigationOrder: 60 + $position,
+        ), $types, array_keys($types));
     }
 
     public function translationId(int $id, string $locale): ?int

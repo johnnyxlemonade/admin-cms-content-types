@@ -64,6 +64,14 @@ final readonly class DefinitionService
     }
 
     /**
+     * Returns the default menu position for a new Content Type
+     */
+    public function nextSortOrder(): int
+    {
+        return $this->model->nextSortOrder();
+    }
+
+    /**
      * Saves a definition while preserving existing field and relation data
      *
      * @param array<string,mixed> $input

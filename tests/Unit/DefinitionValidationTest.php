@@ -30,7 +30,7 @@ final class DefinitionValidationTest extends DefinitionTestCase
 
     public function testSystemMediaDefaultsAndIndependentValues(): void
     {
-        $base = ['name' => 'Type', 'description' => 'Description'];
+        $base = ['name' => 'Type', 'description' => 'Description', 'sort_order' => '7'];
         foreach ([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 0], [1, 0, 1], [0, 1, 1], [1, 1, 1]] as [$thumbnail, $gallery, $attachments]) {
             $values = $this->validation()->type($base + [
                 'thumbnail_enabled' => (string) $thumbnail,
@@ -45,11 +45,31 @@ final class DefinitionValidationTest extends DefinitionTestCase
         self::assertSame(0, $defaults['thumbnail_enabled']);
         self::assertSame(0, $defaults['gallery_enabled']);
         self::assertSame(0, $defaults['attachments_enabled']);
+        self::assertSame(7, $defaults['sort_order']);
     }
 
     public function testCodeIsSuggestedFromCzechName(): void
     {
         self::assertSame(['name' => 'Nabídky práce', 'code' => 'nabidky_prace'], $this->validation()->identity(['name' => 'Nabídky práce']));
+    }
+
+    /**
+     * Rejects menu positions outside the supported integer range
+     */
+    public function testTypeMenuOrderMustBeANonnegativeInteger(): void
+    {
+        foreach (['', '-1', '1.5', '1000001'] as $sortOrder) {
+            try {
+                $this->validation()->type([
+                    'name' => 'Type',
+                    'description' => 'Description',
+                    'sort_order' => $sortOrder,
+                ]);
+                self::fail('Invalid Content Type menu order accepted.');
+            } catch (DefinitionValidationException $exception) {
+                self::assertArrayHasKey('sort_order', $exception->errors());
+            }
+        }
     }
 
     /** @return iterable<string,array{array<string,mixed>}> */

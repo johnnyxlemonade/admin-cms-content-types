@@ -14,16 +14,17 @@ final class ContentTypeModel extends Model
     protected string $table = 'cms_content_type';
 
     /**
-     * @return QueryPage<array{id:int,code:string,name:string,enabled:int,deleted_at:string|null}>
+     * @return QueryPage<array{id:int,code:string,name:string,sort_order:int,enabled:int,deleted_at:string|null}>
      */
     public function listForDataGrid(DataGridQuery $query): QueryPage
     {
-        $sort = $query->sortKey() === 'code' ? 'code' : 'name';
+        $sorts = ['name' => 'name', 'code' => 'code', 'sortOrder' => 'sort_order'];
+        $sort = $sorts[$query->sortKey()] ?? 'sort_order';
         /**
-         * @var list<array{id:int,code:string,name:string,enabled:int,deleted_at:string|null}> $rows
+         * @var list<array{id:int,code:string,name:string,sort_order:int,enabled:int,deleted_at:string|null}> $rows
          */
         $rows = $this->filtered($query->search(), $query->filter('status'))
-            ->select(['id', 'code', 'name', 'enabled', 'deleted_at'])
+            ->select(['id', 'code', 'name', 'sort_order', 'enabled', 'deleted_at'])
             ->orderBy($sort, $query->sortDirection() === 'desc' ? 'DESC' : 'ASC')
             ->orderBy('id', 'ASC')
             ->limit($query->pageSize(), ($query->page() - 1) * $query->pageSize())

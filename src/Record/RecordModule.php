@@ -37,6 +37,7 @@ final readonly class RecordModule implements AdminModuleDefinitionInterface, Adm
         private bool $thumbnailEnabled = false,
         private bool $tagsEnabled = false,
         private array $routePrefixes = [],
+        private int $navigationOrder = 60,
     ) {}
 
     /**
@@ -100,7 +101,7 @@ final readonly class RecordModule implements AdminModuleDefinitionInterface, Adm
             'records.module.name',
             AdminIcon::Boxes,
             AdminNavigationGroup::Content,
-            60,
+            $this->navigationOrder,
             $this->segment(),
             $this->code() . '.view_own',
             name: $this->name,

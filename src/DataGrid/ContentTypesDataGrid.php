@@ -49,6 +49,7 @@ final readonly class ContentTypesDataGrid implements DataGridProviderInterface
             columns: [
                 new DataGridColumnDefinition(key: 'name', translationKey: 'content-types.fields.name', sortKey: 'name'),
                 new DataGridColumnDefinition(key: 'code', translationKey: 'content-types.fields.code', sortKey: 'code'),
+                new DataGridColumnDefinition(key: 'sortOrder', translationKey: 'content-types.fields.sort_order', sortKey: 'sortOrder'),
                 new DataGridColumnDefinition(key: 'enabled', translationKey: 'content-types.fields.enabled'),
                 new DataGridColumnDefinition(key: 'actions', translationKey: 'admin.common.actions'),
             ],
@@ -59,7 +60,7 @@ final readonly class ContentTypesDataGrid implements DataGridProviderInterface
                     new SelectOptionDefinition('deleted', $this->translator->get('content-types.list.deleted')),
                 ])),
             ],
-            defaultSortKey: 'name',
+            defaultSortKey: 'sortOrder',
             defaultSortDirection: 'asc',
             defaultPageSize: 25,
             maximumPageSize: 100,
@@ -81,7 +82,7 @@ final readonly class ContentTypesDataGrid implements DataGridProviderInterface
     }
 
     /**
-     * @param array{id:int,code:string,name:string,enabled:int,deleted_at:string|null} $row
+     * @param array{id:int,code:string,name:string,sort_order:int,enabled:int,deleted_at:string|null} $row
      */
     private function row(array $row): DataGridRowDefinition
     {
@@ -123,6 +124,7 @@ final readonly class ContentTypesDataGrid implements DataGridProviderInterface
             cells: [
                 'name' => $editUrl === null ? new ScalarCell(value: $row['name']) : new LinkCell(value: $row['name'], url: $editUrl),
                 'code' => new ScalarCell(value: $row['code']),
+                'sortOrder' => new ScalarCell(value: $row['sort_order']),
                 'enabled' => new ScalarCell(value: $this->translator->get((int) $row['enabled'] === 1 ? 'content-types.editor.yes' : 'content-types.editor.no')),
             ],
             actions: $actions,

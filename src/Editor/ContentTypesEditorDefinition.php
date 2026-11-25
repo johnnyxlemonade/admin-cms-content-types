@@ -8,7 +8,8 @@ use Lemonade\Admin\Action\Presentation\AdminActionFormDefinition;
 use Lemonade\Admin\Editor\AdminEditor\AdminEditorBuilder;
 use Lemonade\Admin\Editor\AdminEditor\AdminEditorDefinition;
 use Lemonade\Admin\Editor\AdminEditor\Field\Field;
-use Lemonade\Admin\Editor\AdminEditor\Header\AdminEditorHeaderDefinition;
+use Lemonade\Admin\Editor\AdminEditor\Layout\AdminEditorTab;
+use Lemonade\Admin\Editor\AdminEditor\Layout\CmsEditorHeader;
 use Lemonade\Admin\Editor\AdminEditor\Layout\CmsEditorSaveBar;
 use Lemonade\Admin\Editor\AdminEditor\Layout\CustomViewBlock;
 use Lemonade\Admin\Editor\AdminEditor\Layout\FieldColumn;
@@ -44,6 +45,7 @@ final readonly class ContentTypesEditorDefinition
         if ($id !== null) {
             $params['id'] = $id;
         }
+        $indexUrl = $this->urls->route('admin.cms.module.index', ['module' => 'content-types']);
         $form = new AdminActionFormDefinition(
             id: 'content-types-editor',
             action: $this->urls->route($id === null ? 'admin.cms.module.create' : 'admin.cms.module.edit', $params),
@@ -74,72 +76,92 @@ final readonly class ContentTypesEditorDefinition
 
         return AdminEditorBuilder::create('cms.content-types')
             ->form($form)
-            ->header(new AdminEditorHeaderDefinition('', titleKey: 'content-types.editor.title', breadcrumbs: [
-                ['label' => '', 'labelKey' => 'content-types.module.name', 'href' => $this->urls->route('admin.cms.module.index', ['module' => 'content-types'])],
-            ]))
-            ->block(new SectionBlock(
-                id: 'type',
+            ->header(CmsEditorHeader::create('content-types', $indexUrl, null))
+            ->tab(new AdminEditorTab(
+                id: 'settings',
+                label: '',
                 blocks: [
-                    Field::hidden('revision'),
+                    new SectionBlock(
+                        id: 'type',
+                        blocks: [
+                            Field::hidden('revision'),
+                            new CustomViewBlock('content-types::editor-basic-intro'),
+                            new FieldGroupBlock([
+                                new FieldColumn(Field::text('name', labelKey: 'content-types.fields.name')->help('', 'content-types.help.type_name')->required()->attributes(['maxlength' => '180']), md: 6, xl: 6),
+                                new FieldColumn($code, md: 6, xl: 6),
+                                new FieldColumn(Field::text('description', labelKey: 'content-types.fields.description')->help('', 'content-types.help.description')->required()->attributes(['maxlength' => '10000']), md: 6, xl: 6),
+                                new FieldColumn(
+                                    Field::number('sort_order', labelKey: 'content-types.fields.sort_order')
+                                        ->helpKey('content-types.help.sort_order')
+                                        ->required()
+                                        ->attributes(['min' => '0', 'max' => '1000000', 'step' => '1']),
+                                    md: 3,
+                                    xl: 3,
+                                ),
+                                new FieldColumn(Field::toggle('enabled', labelKey: 'content-types.fields.enabled')->help('', 'content-types.help.enabled'), md: 3, xl: 3),
+                            ]),
+                        ],
+                        titleKey: 'content-types.editor.basic_information_title',
+                        descriptionKey: 'content-types.editor.basic_information_help',
+                    ),
+                    new SectionBlock(
+                        id: 'system-features',
+                        blocks: [
+                            new CustomViewBlock('content-types::editor-features-intro'),
+                            new FieldGroupBlock([
+                                new FieldColumn(
+                                    Field::toggle('thumbnail_enabled', labelKey: 'content-types.fields.thumbnail_enabled')->helpKey('content-types.help.thumbnail_enabled'),
+                                    md: 6,
+                                    xl: 3,
+                                    cardIcon: AdminIcon::Image,
+                                ),
+                                new FieldColumn(
+                                    Field::toggle('gallery_enabled', labelKey: 'content-types.fields.gallery_enabled')->helpKey('content-types.help.gallery_enabled'),
+                                    md: 6,
+                                    xl: 3,
+                                    cardIcon: AdminIcon::Images,
+                                ),
+                                new FieldColumn(
+                                    Field::toggle('attachments_enabled', labelKey: 'content-types.fields.attachments_enabled')->helpKey('content-types.help.attachments_enabled'),
+                                    md: 6,
+                                    xl: 3,
+                                    cardIcon: AdminIcon::Paperclip,
+                                ),
+                                new FieldColumn(
+                                    Field::toggle('tags_enabled', labelKey: 'content-types.fields.tags_enabled')->helpKey('content-types.help.tags_enabled'),
+                                    md: 6,
+                                    xl: 3,
+                                    cardIcon: AdminIcon::Tags,
+                                ),
+                            ]),
+                        ],
+                        title: '',
+                        titleKey: 'content-types.editor.system_features_title',
+                        descriptionKey: 'content-types.editor.system_features_help',
+                    ),
+                    new SectionBlock(
+                        id: 'route-prefixes',
+                        blocks: [new FieldGroupBlock($routePrefixColumns)],
+                        title: '',
+                        titleKey: 'content-types.editor.route_prefixes_title',
+                        descriptionKey: 'content-types.editor.route_prefixes_help',
+                    ),
+                ],
+                labelKey: 'content-types.editor.tabs.settings',
+                default: true,
+            ))
+            ->tab(new AdminEditorTab(
+                id: 'fields',
+                label: '',
+                blocks: [
                     Field::hidden('definition'),
-                    new CustomViewBlock('content-types::editor-navigation'),
-                    new CustomViewBlock('content-types::editor-basic-intro'),
-                    new FieldGroupBlock([
-                        new FieldColumn(Field::text('name', labelKey: 'content-types.fields.name')->help('', 'content-types.help.type_name')->required()->attributes(['maxlength' => '180']), md: 6, xl: 3),
-                        new FieldColumn($code, md: 6, xl: 3),
-                        new FieldColumn(Field::text('description', labelKey: 'content-types.fields.description')->help('', 'content-types.help.description')->required()->attributes(['maxlength' => '10000']), md: 9, xl: 4),
-                        new FieldColumn(Field::toggle('enabled', labelKey: 'content-types.fields.enabled')->help('', 'content-types.help.enabled'), md: 3, xl: 2),
+                    new CustomViewBlock('content-types::builder', [
+                        'adminEditorFields' => $this->fields,
+                        'inspectors' => $this->types->inspectors($this->definitions->relationTargetOptions()),
                     ]),
                 ],
-                titleKey: 'content-types.editor.basic_information_title',
-                descriptionKey: 'content-types.editor.basic_information_help',
+                labelKey: 'content-types.editor.tabs.fields',
             ))
-            ->block(new SectionBlock(
-                id: 'system-features',
-                blocks: [
-                    new CustomViewBlock('content-types::editor-features-intro'),
-                    new FieldGroupBlock([
-                        new FieldColumn(
-                            Field::toggle('thumbnail_enabled', labelKey: 'content-types.fields.thumbnail_enabled')->helpKey('content-types.help.thumbnail_enabled'),
-                            md: 6,
-                            xl: 3,
-                            cardIcon: AdminIcon::Image,
-                        ),
-                        new FieldColumn(
-                            Field::toggle('gallery_enabled', labelKey: 'content-types.fields.gallery_enabled')->helpKey('content-types.help.gallery_enabled'),
-                            md: 6,
-                            xl: 3,
-                            cardIcon: AdminIcon::Images,
-                        ),
-                        new FieldColumn(
-                            Field::toggle('attachments_enabled', labelKey: 'content-types.fields.attachments_enabled')->helpKey('content-types.help.attachments_enabled'),
-                            md: 6,
-                            xl: 3,
-                            cardIcon: AdminIcon::Paperclip,
-                        ),
-                        new FieldColumn(
-                            Field::toggle('tags_enabled', labelKey: 'content-types.fields.tags_enabled')->helpKey('content-types.help.tags_enabled'),
-                            md: 6,
-                            xl: 3,
-                            cardIcon: AdminIcon::Tags,
-                        ),
-                    ]),
-                ],
-                title: '',
-                titleKey: 'content-types.editor.system_features_title',
-                descriptionKey: 'content-types.editor.system_features_help',
-            ))
-            ->block(new SectionBlock(
-                id: 'route-prefixes',
-                blocks: [new FieldGroupBlock($routePrefixColumns)],
-                title: '',
-                titleKey: 'content-types.editor.route_prefixes_title',
-                descriptionKey: 'content-types.editor.route_prefixes_help',
-            ))
-            ->block(new CustomViewBlock('content-types::builder', [
-                'adminEditorFields' => $this->fields,
-                'inspectors' => $this->types->inspectors($this->definitions->relationTargetOptions()),
-            ]))
             ->saveBar(CmsEditorSaveBar::create())
             ->build();
     }

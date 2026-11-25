@@ -30,13 +30,18 @@ final readonly class DefinitionValidation
     public function type(array $input): array
     {
         $description = $this->values->text($input, 'description');
+        $sortOrder = $this->values->text($input, 'sort_order');
         $this->values->check(
-            ['description' => $description],
-            ValidationSchema::create()->field('description')->required()->maxLength(10000)->end(),
+            ['description' => $description, 'sort_order' => $sortOrder],
+            ValidationSchema::create()
+                ->field('description')->required()->maxLength(10000)
+                ->field('sort_order')->required()->integer()->greaterThanOrEqualTo(0)->lessThanOrEqualTo(1000000)
+                ->end(),
         );
 
         return $this->identity($input) + [
             'description' => $description,
+            'sort_order' => (int) $sortOrder,
             'enabled' => $this->values->boolean($input, 'enabled'),
             'thumbnail_enabled' => $this->values->boolean($input, 'thumbnail_enabled'),
             'gallery_enabled' => $this->values->boolean($input, 'gallery_enabled'),

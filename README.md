@@ -19,7 +19,8 @@ attributes. Definitions, typed values and record relations are stored relational
 without JSON persistence; decimal values retain their precision without float conversion.
 
 Active types appear in the Content navigation group with a standard DataGrid and
-AdminEditor. Records reuse CMS title, display settings, SEO, publication, ownership,
+AdminEditor. Their definition-level menu order controls the dynamic sidebar and the
+definition list, with the stable type ID used for ties. Records reuse CMS title, display settings, SEO, publication, ownership,
 audit, soft delete and restore. Content structure comes exclusively from the defined
 custom fields; `textarea` and `richtext` fields remain available and rich-text images
 and files use the shared Admin upload usages. Custom values and system data share one

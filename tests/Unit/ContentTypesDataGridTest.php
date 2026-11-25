@@ -31,7 +31,7 @@ final class ContentTypesDataGridTest extends TestCase
         $driver = self::createStub(DatabaseDriverInterface::class);
         $driver->method('protect_identifiers')->willReturnCallback(static fn(string $identifier): string => $identifier);
         $result = self::createStub(DatabaseResultInterface::class);
-        $result->method('result_array')->willReturn([['id' => 7, 'code' => 'document', 'name' => 'Documents', 'enabled' => 1, 'deleted_at' => null]]);
+        $result->method('result_array')->willReturn([['id' => 7, 'code' => 'document', 'name' => 'Documents', 'sort_order' => 4, 'enabled' => 1, 'deleted_at' => null]]);
         $result->method('row_array')->willReturn(['numrows' => 26]);
         $driver->method('query')->willReturnCallback(static function (string $sql, array|false $bindings) use (&$queries, $result): DatabaseResultInterface {
             $queries[] = ['sql' => $sql, 'bindings' => $bindings];
@@ -54,6 +54,7 @@ final class ContentTypesDataGridTest extends TestCase
         }
         self::assertStringContainsString('ORDER BY code DESC, id ASC', $queries[0]['sql']);
         self::assertStringContainsString('LIMIT 25', $queries[0]['sql']);
+        self::assertSame('sortOrder', $grid->dataGridDefinition()->defaultSortKey());
     }
 
     public function testDeletedViewFiltersBothQueries(): void
@@ -100,9 +101,9 @@ final class ContentTypesDataGridTest extends TestCase
         $driver->method('protect_identifiers')->willReturnArgument(0);
         $result = self::createStub(DatabaseResultInterface::class);
         $result->method('result_array')->willReturn([
-            ['id' => 7, 'code' => 'active', 'name' => 'Active', 'enabled' => 1, 'deleted_at' => null],
-            ['id' => 8, 'code' => 'inactive', 'name' => 'Inactive', 'enabled' => 0, 'deleted_at' => null],
-            ['id' => 9, 'code' => 'deleted', 'name' => 'Deleted', 'enabled' => 0, 'deleted_at' => '2026-11-06 12:00:00'],
+            ['id' => 7, 'code' => 'active', 'name' => 'Active', 'sort_order' => 0, 'enabled' => 1, 'deleted_at' => null],
+            ['id' => 8, 'code' => 'inactive', 'name' => 'Inactive', 'sort_order' => 1, 'enabled' => 0, 'deleted_at' => null],
+            ['id' => 9, 'code' => 'deleted', 'name' => 'Deleted', 'sort_order' => 2, 'enabled' => 0, 'deleted_at' => '2026-11-06 12:00:00'],
         ]);
         $result->method('row_array')->willReturn(['numrows' => 2]);
         $driver->method('query')->willReturn($result);

@@ -43,6 +43,7 @@ final readonly class ContentTypesEditor implements EditorProviderInterface
                     'name',
                     'code',
                     'description',
+                    'sort_order',
                     'enabled',
                     'thumbnail_enabled',
                     'gallery_enabled',
@@ -62,6 +63,7 @@ final readonly class ContentTypesEditor implements EditorProviderInterface
             'name' => '',
             'code' => '',
             'description' => '',
+            'sort_order' => $this->definitions->nextSortOrder(),
             'enabled' => 1,
             'thumbnail_enabled' => 0,
             'gallery_enabled' => 0,
@@ -88,6 +90,7 @@ final readonly class ContentTypesEditor implements EditorProviderInterface
             ->field('name')->required()->maxLength(180)
             ->field('code')->maxLength(64)
             ->field('description')->required()->maxLength(10000)
+            ->field('sort_order')->required()->integer()->greaterThanOrEqualTo(0)->lessThanOrEqualTo(1000000)
             ->field('enabled')->inList(['0', '1'])
             ->field('thumbnail_enabled')->inList(['0', '1'])
             ->field('gallery_enabled')->inList(['0', '1'])

@@ -55,6 +55,7 @@ use Lemonade\Cms\ContentTypes\Field\FieldTypeRegistry;
 use Lemonade\Cms\ContentTypes\Field\FieldValidation;
 use Lemonade\Cms\ContentTypes\Migrations\AddContentRecordRelations;
 use Lemonade\Cms\ContentTypes\Migrations\AddContentRepeaters;
+use Lemonade\Cms\ContentTypes\Migrations\AddContentTypeSortOrder;
 use Lemonade\Cms\ContentTypes\Migrations\AddContentTypeSystemMedia;
 use Lemonade\Cms\ContentTypes\Migrations\AddContentTypeTagsAndRoutePrefixes;
 use Lemonade\Cms\ContentTypes\Migrations\AddContentTypeThumbnail;
@@ -168,6 +169,20 @@ final class RecordLifecycleTest extends TestCase
         foreach ([new CreateCoreFiles(), new CreateContentTypes(), new CreateContentFieldDefinitions(), new CreateContentRecords(), new AddContentTypeSystemMedia(), new AddContentTypeThumbnail(), new AddContentTypeTagsAndRoutePrefixes(), new AddContentRecordRelations(), new AddContentRepeaters()] as $migration) {
             $migration->up($schema);
         }
+        $database->table('cms_content_type')->insert(['code' => 'legacy_first', 'name' => 'Legacy first']);
+        $legacyFirstId = (int) $database->lastInsertId();
+        $database->table('cms_content_type')->insert(['code' => 'legacy_second', 'name' => 'Legacy second']);
+        $legacySecondId = (int) $database->lastInsertId();
+        $preMigrationModules = (new RecordModel($database, $types))->modules();
+        self::assertSame(
+            [$legacyFirstId, $legacySecondId],
+            array_map(static fn(RecordModule $module): int => $module->id(), $preMigrationModules),
+        );
+        (new AddContentTypeSortOrder($database))->up($schema);
+        $legacyTypes = $database->table('cms_content_type')->orderBy('sort_order')->orderBy('id')->getArray();
+        self::assertSame([$legacyFirstId, $legacySecondId], array_map(static fn(array $type): int => (int) $type['id'], $legacyTypes));
+        self::assertSame([0, 1], array_map(static fn(array $type): int => (int) $type['sort_order'], $legacyTypes));
+        $database->table('cms_content_type')->whereIn('id', [$legacyFirstId, $legacySecondId])->delete();
         $bodyColumns = $database->select(
             "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'cms_content_record_translation' AND COLUMN_NAME IN ('summary', 'content')",
         );
@@ -175,6 +190,19 @@ final class RecordLifecycleTest extends TestCase
         $definitions = new DefinitionModel($database);
         $typeId = $definitions->createType(['code' => 'integration', 'name' => 'Integration', 'enabled' => 1]);
         $secondType = $definitions->createType(['code' => 'other', 'name' => 'Other', 'enabled' => 1]);
+        self::assertSame(0, (int) $this->row($definitions->type($typeId))['sort_order']);
+        self::assertSame(1, (int) $this->row($definitions->type($secondType))['sort_order']);
+        $definitions->updateType($typeId, ['sort_order' => 5], (int) $this->row($definitions->type($typeId))['revision']);
+        $orderedModules = (new RecordModel($database, $types))->modules();
+        self::assertSame([$secondType, $typeId], array_map(static fn(RecordModule $module): int => $module->id(), $orderedModules));
+        $definitions->updateType($secondType, ['sort_order' => 5], (int) $this->row($definitions->type($secondType))['revision']);
+        $tiedModules = (new RecordModel($database, $types))->modules();
+        self::assertSame([$typeId, $secondType], array_map(static fn(RecordModule $module): int => $module->id(), $tiedModules));
+        $definitions->updateType($secondType, ['enabled' => 0], (int) $this->row($definitions->type($secondType))['revision']);
+        $disabledModules = (new RecordModel($database, $types))->modules();
+        self::assertFalse($disabledModules[1]->enabled());
+        $definitions->updateType($typeId, ['sort_order' => 0], (int) $this->row($definitions->type($typeId))['revision']);
+        $definitions->updateType($secondType, ['sort_order' => 1, 'enabled' => 1], (int) $this->row($definitions->type($secondType))['revision']);
         self::assertSame(0, (int) $this->row($database->table('cms_content_type')->where('id', $typeId)->first())['thumbnail_enabled']);
         $rowId = $definitions->saveRow($typeId, null, 0);
         $ids = [];
