@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 return [
     'relations' => ['move_earlier' => 'Move earlier', 'move_later' => 'Move later'],
+    'repeater' => [
+        'add' => 'Add item',
+        'remove' => 'Remove item',
+        'move' => 'Drag to reorder item',
+        'empty' => 'No items yet.',
+    ],
     'module' => [
         'name' => 'Content records',
         'description' => 'Manage and publish content records.',

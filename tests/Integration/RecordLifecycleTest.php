@@ -54,6 +54,7 @@ use Lemonade\Cms\ContentTypes\Exception\DefinitionValidationException;
 use Lemonade\Cms\ContentTypes\Field\FieldTypeRegistry;
 use Lemonade\Cms\ContentTypes\Field\FieldValidation;
 use Lemonade\Cms\ContentTypes\Migrations\AddContentRecordRelations;
+use Lemonade\Cms\ContentTypes\Migrations\AddContentRepeaters;
 use Lemonade\Cms\ContentTypes\Migrations\AddContentTypeSystemMedia;
 use Lemonade\Cms\ContentTypes\Migrations\AddContentTypeTagsAndRoutePrefixes;
 use Lemonade\Cms\ContentTypes\Migrations\AddContentTypeThumbnail;
@@ -164,7 +165,7 @@ final class RecordLifecycleTest extends TestCase
         $database->statement("INSERT IGNORE INTO system_language (code,name,enabled,is_default,sort_order) VALUES ('cs','Czech',1,1,1), ('en','English',1,0,2), ('de','German',1,0,3)");
 
         $schema = new Schema(new SchemaCompiler(new MysqlSchemaGrammar(new MysqlSqlEscaper($escaper), $config)), $driver);
-        foreach ([new CreateCoreFiles(), new CreateContentTypes(), new CreateContentFieldDefinitions(), new CreateContentRecords(), new AddContentTypeSystemMedia(), new AddContentTypeThumbnail(), new AddContentTypeTagsAndRoutePrefixes(), new AddContentRecordRelations()] as $migration) {
+        foreach ([new CreateCoreFiles(), new CreateContentTypes(), new CreateContentFieldDefinitions(), new CreateContentRecords(), new AddContentTypeSystemMedia(), new AddContentTypeThumbnail(), new AddContentTypeTagsAndRoutePrefixes(), new AddContentRecordRelations(), new AddContentRepeaters()] as $migration) {
             $migration->up($schema);
         }
         $bodyColumns = $database->select(
@@ -492,14 +493,148 @@ final class RecordLifecycleTest extends TestCase
         );
         $publicCs = PublicLocaleResolution::route('cs', 'cs', '');
         $publicEn = PublicLocaleResolution::route('cs', 'en', '');
+        $repeaterFieldId = $definitions->saveField($typeId, null, [
+            'name' => 'Sections', 'code' => 'sections', 'kind' => 'repeater', 'row_id' => $rowId,
+            'required' => 1, 'localized' => 0, 'sort_order' => 200,
+        ]);
+        $definitions->saveRepeaterFields($repeaterFieldId, [
+            ['id' => null, 'name' => 'Title', 'code' => 'title', 'kind' => 'text', 'required' => 1, 'localized' => 1],
+            ['id' => null, 'name' => 'Content', 'code' => 'content', 'kind' => 'richtext', 'required' => 0, 'localized' => 1],
+            ['id' => null, 'name' => 'Note', 'code' => 'note', 'kind' => 'textarea', 'required' => 0, 'localized' => 0],
+        ]);
+        $children = array_column($definitions->repeaterFields($repeaterFieldId), null, 'code');
+        $titleFieldId = (int) $children['title']['id'];
+        $contentFieldId = (int) $children['content']['id'];
+        $noteFieldId = (int) $children['note']['id'];
+        $repeaterKey = 'field_' . $repeaterFieldId;
+        $repeaterLifecycle = $this->lifecycle($database, $module, new AuditLogService($database));
+        $czechRepeater = [
+            'locale' => 'cs', 'title' => 'Integration record', 'publication_state' => '2',
+            $repeaterKey . '_present' => '1',
+            $repeaterKey => [
+                'order' => ['new_first', 'new_second'],
+                'items' => [
+                    'new_first' => [
+                        'field_' . $titleFieldId => 'První sekce',
+                        'field_' . $contentFieldId => '<p>První obsah</p>',
+                        'field_' . $noteFieldId => 'Sdílená první poznámka',
+                    ],
+                    'new_second' => [
+                        'field_' . $titleFieldId => 'Druhá sekce',
+                        'field_' . $contentFieldId => '<p>Druhý obsah</p>',
+                        'field_' . $noteFieldId => 'Sdílená druhá poznámka',
+                    ],
+                ],
+            ],
+        ];
+        $invalidRepeater = $czechRepeater;
+        unset($invalidRepeater[$repeaterKey]['items']['new_first']['field_' . $titleFieldId]);
+        try {
+            $repeaterLifecycle->save(7, $id, CmsContentInput::fromEditor($invalidRepeater), RecordData::fromEditor($invalidRepeater));
+            self::fail('Published repeater accepted a missing required child value.');
+        } catch (DefinitionValidationException $exception) {
+            self::assertArrayHasKey($repeaterKey, $exception->errors());
+            self::assertSame(0, $database->table('cms_content_repeater_item')->where('record_id', $id)->where('field_id', $repeaterFieldId)->countAllResults());
+        }
+        $repeaterLifecycle->save(7, $id, CmsContentInput::fromEditor($czechRepeater), RecordData::fromEditor($czechRepeater));
+        $storedItems = $database->table('cms_content_repeater_item')
+            ->where('record_id', $id)->where('field_id', $repeaterFieldId)->orderBy('sort_order')->getArray();
+        self::assertCount(2, $storedItems);
+        $firstItemId = (int) $storedItems[0]['id'];
+        $secondItemId = (int) $storedItems[1]['id'];
+
+        $czechRepeater[$repeaterKey] = [
+            'order' => [(string) $secondItemId, (string) $firstItemId],
+            'items' => [
+                (string) $secondItemId => [
+                    'id' => (string) $secondItemId,
+                    'field_' . $titleFieldId => 'Druhá sekce upravená',
+                    'field_' . $contentFieldId => '<p>Druhý obsah upravený</p>',
+                    'field_' . $noteFieldId => 'Sdílená druhá poznámka',
+                ],
+                (string) $firstItemId => [
+                    'id' => (string) $firstItemId,
+                    'field_' . $titleFieldId => 'První sekce',
+                    'field_' . $contentFieldId => '<p>První obsah</p>',
+                    'field_' . $noteFieldId => 'Sdílená první poznámka',
+                ],
+            ],
+        ];
+        $repeaterLifecycle->save(7, $id, CmsContentInput::fromEditor($czechRepeater), RecordData::fromEditor($czechRepeater));
+        self::assertSame([$secondItemId, $firstItemId], array_map(
+            static fn(array $item): int => (int) $item['id'],
+            $database->table('cms_content_repeater_item')->where('record_id', $id)->where('field_id', $repeaterFieldId)->orderBy('sort_order')->getArray(),
+        ));
+
+        $englishRepeater = [
+            'locale' => 'en', 'title' => 'English draft', 'publication_state' => '1',
+            $repeaterKey . '_present' => '1',
+            $repeaterKey => [
+                'order' => [(string) $firstItemId, (string) $secondItemId],
+                'items' => [
+                    (string) $firstItemId => [
+                        'id' => (string) $firstItemId,
+                        'field_' . $titleFieldId => 'First section',
+                        'field_' . $contentFieldId => '<p>First content</p>',
+                        'field_' . $noteFieldId => 'Sdílená první poznámka',
+                    ],
+                    (string) $secondItemId => [
+                        'id' => (string) $secondItemId,
+                        'field_' . $titleFieldId => 'Second section',
+                        'field_' . $contentFieldId => '<p>Second content</p>',
+                        'field_' . $noteFieldId => 'Sdílená druhá poznámka',
+                    ],
+                ],
+            ],
+        ];
+        $repeaterLifecycle->save(7, $id, CmsContentInput::fromEditor($englishRepeater), RecordData::fromEditor($englishRepeater));
+        $repeaterDefinition = array_values(array_filter(
+            $definitions->fields($typeId),
+            static fn(array $field): bool => (int) $field['id'] === $repeaterFieldId,
+        ));
+        $czechItems = $recordModel->repeaterItemsForRecords([$id], 'cs', $repeaterDefinition)[$id][$repeaterFieldId];
+        $englishItems = $recordModel->repeaterItemsForRecords([$id], 'en', $repeaterDefinition)[$id][$repeaterFieldId];
+        self::assertSame([$firstItemId, $secondItemId], array_map(static fn($item): int => $item->getId(), $czechItems));
+        self::assertSame([$firstItemId, $secondItemId], array_map(static fn($item): int => $item->getId(), $englishItems));
+        self::assertSame(['První sekce', 'Druhá sekce upravená'], array_map(static fn($item): mixed => $item->getField('title')->getValue(), $czechItems));
+        self::assertSame(['First section', 'Second section'], array_map(static fn($item): mixed => $item->getField('title')->getValue(), $englishItems));
+        self::assertSame('Sdílená první poznámka', $englishItems[0]->getField('note')->getValue());
+        self::assertSame(8, $database->table('cms_content_repeater_item_translation_value')->where('record_id', $id)->countAllResults());
+
+        $publicRepeated = $public->record('integration', $id, $publicCs)?->getRepeatedField('sections');
+        self::assertNotNull($publicRepeated);
+        self::assertSame([$firstItemId, $secondItemId], array_map(static fn($item): int => $item->getId(), $publicRepeated));
+        self::assertSame('První sekce', $publicRepeated[0]->getField('title')->getValue());
+
+        $czechRepeater[$repeaterKey] = [
+            'order' => [(string) $firstItemId],
+            'items' => [(string) $firstItemId => [
+                'id' => (string) $firstItemId,
+                'field_' . $titleFieldId => 'První sekce',
+                'field_' . $contentFieldId => '<p>První obsah</p>',
+                'field_' . $noteFieldId => 'Sdílená první poznámka',
+            ]],
+        ];
+        $repeaterLifecycle->save(7, $id, CmsContentInput::fromEditor($czechRepeater), RecordData::fromEditor($czechRepeater));
+        self::assertSame(1, $database->table('cms_content_repeater_item')->where('record_id', $id)->where('field_id', $repeaterFieldId)->countAllResults());
+        self::assertSame(0, $database->table('cms_content_repeater_item_translation_value')->where('item_id', $secondItemId)->countAllResults());
+        self::assertSame(0, $database->table('cms_content_repeater_item_value')->where('item_id', $secondItemId)->countAllResults());
+        $definitions->saveRepeaterFields($repeaterFieldId, [
+            ['id' => $titleFieldId, 'name' => 'Heading', 'code' => 'title', 'kind' => 'text', 'required' => 1, 'localized' => 1],
+            ['id' => $noteFieldId, 'name' => 'Note', 'code' => 'note', 'kind' => 'textarea', 'required' => 0, 'localized' => 0],
+        ]);
+        self::assertNotNull($this->row($database->table('cms_content_repeater_field')->where('id', $contentFieldId)->first())['archived_at']);
+        self::assertSame(2, $database->table('cms_content_repeater_item_translation_value')->where('child_field_id', $contentFieldId)->countAllResults());
         $publicRecord = $public->record('integration', $id, $publicCs);
         self::assertNotNull($publicRecord);
         self::assertInstanceOf(PublishedMediaInterface::class, $publicRecord);
+        self::assertArrayNotHasKey('sections', $publicRecord->getFields());
         self::assertSame('Integration record', $publicRecord->getTitle());
         self::assertInstanceOf(\DateTimeImmutable::class, $publicRecord->getUpdatedAt());
         self::assertTrue($publicRecord->isAuthorShown());
         self::assertNotNull($publicRecord->getPublicUrl());
         self::assertSame('Text', $publicRecord->getField('text')->getValue());
+        self::assertSame([$firstItemId], array_map(static fn($item): int => $item->getId(), $publicRecord->getRepeatedField('sections')));
         $searched = $public->collection(
             'integration',
             $publicCs,
@@ -627,6 +762,12 @@ final class RecordLifecycleTest extends TestCase
         } catch (InvalidArgumentException $exception) {
             self::assertSame('Invalid option field filter.', $exception->getMessage());
         }
+        try {
+            $public->collection('integration', $publicCs, filters: ['sections' => 'unsupported']);
+            self::fail('Repeater filter accepted.');
+        } catch (InvalidArgumentException $exception) {
+            self::assertSame('Unknown scalar field filter: sections', $exception->getMessage());
+        }
         $secondPublished = ['locale' => 'cs', 'title' => 'Druhý cíl', 'publication_state' => '2'];
         $this->lifecycle($database, $other, new AuditLogService($database))->save(
             7,
@@ -745,6 +886,10 @@ final class RecordLifecycleTest extends TestCase
         $editorHtml = (new AdminEditorRenderer($view, $helpers))->render($editor, $renderContext);
         self::assertStringContainsString('name="field_' . $relationFieldId . '_present"', $editorHtml);
         self::assertStringContainsString('name="field_' . $relationFieldId . '[]"', $editorHtml);
+        self::assertStringContainsString('data-lemonade-repeatable-group', $editorHtml);
+        self::assertStringContainsString('data-lemonade-sortable', $editorHtml);
+        self::assertStringContainsString('name="field_' . $repeaterFieldId . '[order][]"', $editorHtml);
+        self::assertStringContainsString('name="field_' . $repeaterFieldId . '[items][' . $firstItemId . '][field_' . $titleFieldId . ']"', $editorHtml);
         $psrFactory = new Psr17Factory();
         $languages = new LanguageRegistry($database, new CacheManager(new ArrayCacheItemPool()));
         $urls = new UrlGenerator($router);
@@ -770,6 +915,7 @@ final class RecordLifecycleTest extends TestCase
         self::assertNotNull($gridDefinition->filter('field_' . $relationFieldId)?->asyncUrl());
         $columnKeys = array_map(static fn($column): string => $column->key(), $gridDefinition->columns());
         self::assertContains('field_' . $relationFieldId, $columnKeys);
+        self::assertNotContains('field_' . $repeaterFieldId, $columnKeys);
         foreach ($definitions->fields($typeId) as $field) {
             if (in_array($field['kind'], ['image', 'gallery', 'file', 'files'], true)) {
                 self::assertNotContains('field_' . $field['id'], $columnKeys);

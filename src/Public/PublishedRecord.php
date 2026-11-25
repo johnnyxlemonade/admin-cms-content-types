@@ -19,6 +19,7 @@ final readonly class PublishedRecord implements PublishedMediaInterface
      * Creates a complete published record projection
      *
      * @param array<string,RecordFieldValue> $fields
+     * @param array<string,list<RepeatedFieldItem>> $repeatedFields
      * @param list<FileMetadata> $gallery
      * @param list<FileMetadata> $attachments
      * @param array<string,list<FileMetadata>> $fieldFiles
@@ -33,6 +34,7 @@ final readonly class PublishedRecord implements PublishedMediaInterface
         private DateTimeImmutable $updatedAt,
         private ?string $publicUrl,
         private array $fields,
+        private array $repeatedFields,
         private ?FileMetadata $thumbnail,
         private array $gallery,
         private array $attachments,
@@ -122,6 +124,20 @@ final readonly class PublishedRecord implements PublishedMediaInterface
     public function getField(string $code): RecordFieldValue
     {
         return $this->fields[$code] ?? throw new InvalidArgumentException('Unknown readable field: ' . $code);
+    }
+
+    /**
+     * Returns ordered typed items for one repeatable field
+     *
+     * @return list<RepeatedFieldItem>
+     */
+    public function getRepeatedField(string $code): array
+    {
+        if (!array_key_exists($code, $this->repeatedFields)) {
+            throw new InvalidArgumentException('Unknown repeatable field: ' . $code);
+        }
+
+        return $this->repeatedFields[$code];
     }
 
     /**

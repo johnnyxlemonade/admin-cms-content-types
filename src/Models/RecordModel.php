@@ -8,6 +8,8 @@ use DateTimeImmutable;
 use InvalidArgumentException;
 use Lemonade\Cms\CmsPublicationState;
 use Lemonade\Cms\ContentTypes\Field\FieldTypeRegistry;
+use Lemonade\Cms\ContentTypes\Public\RepeatedFieldItem;
+use Lemonade\Cms\ContentTypes\Record\RecordFieldValue;
 use Lemonade\Cms\ContentTypes\Record\RecordModule;
 use Lemonade\Framework\Database\Database;
 use Lemonade\Framework\Database\QueryBuilder;
@@ -123,7 +125,7 @@ final readonly class RecordModel
         foreach ($ids as $id) {
             $result[$id] = [];
             foreach ($fields as $field) {
-                if ($field['archived_at'] !== null || $field['kind'] === 'relation') {
+                if ($field['archived_at'] !== null || $field['kind'] === 'relation' || FieldTypeRegistry::isRepeater((string) $field['kind'])) {
                     continue;
                 }
                 $storage = $this->types->get((string) $field['kind'])->storage();
@@ -175,6 +177,154 @@ final readonly class RecordModel
                 $this->database->table($table)->insert($identity + $columns);
             }
         }
+    }
+
+    /**
+     * Loads ordered repeatable items and typed child values for several records
+     *
+     * @param list<int> $recordIds
+     * @param list<array<string,mixed>> $fields
+     * @return array<int,array<int,list<RepeatedFieldItem>>>
+     */
+    public function repeaterItemsForRecords(array $recordIds, string $locale, array $fields): array
+    {
+        $result = [];
+        foreach ($recordIds as $recordId) {
+            foreach ($fields as $field) {
+                $result[$recordId][(int) $field['id']] = [];
+            }
+        }
+        if ($recordIds === [] || $fields === []) {
+            return $result;
+        }
+        $fieldIds = array_map(static fn(array $field): int => (int) $field['id'], $fields);
+        $items = $this->database->table('cms_content_repeater_item')
+            ->whereIn('record_id', $recordIds)
+            ->whereIn('field_id', $fieldIds)
+            ->orderBy('record_id')
+            ->orderBy('field_id')
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->getArray();
+        if ($items === []) {
+            return $result;
+        }
+        $itemIds = array_map(static fn(array $item): int => (int) $item['id'], $items);
+        $values = [];
+        foreach ($this->database->table('cms_content_repeater_item_value')->whereIn('item_id', $itemIds)->getArray() as $value) {
+            $values[0][(int) $value['item_id']][(int) $value['child_field_id']] = $value['value_text'];
+        }
+        $localized = $this->database->table('cms_content_repeater_item_translation_value v')
+            ->select(['v.item_id', 'v.child_field_id', 'v.value_text'])
+            ->joinOn('cms_content_record_translation t', 't.id', '=', 'v.translation_id')
+            ->whereIn('v.item_id', $itemIds)
+            ->where('t.locale', $locale)
+            ->getArray();
+        foreach ($localized as $value) {
+            $values[1][(int) $value['item_id']][(int) $value['child_field_id']] = $value['value_text'];
+        }
+        $definitions = array_column($fields, null, 'id');
+        foreach ($items as $item) {
+            $field = $definitions[$item['field_id']] ?? null;
+            if ($field === null) {
+                continue;
+            }
+            $children = [];
+            foreach ($field['children'] as $child) {
+                if ($child['archived_at'] !== null) {
+                    continue;
+                }
+                $stored = $values[(int) $child['localized']][(int) $item['id']][(int) $child['id']] ?? null;
+                $value = RecordFieldValue::fromStored(
+                    $child + ['options' => []],
+                    $stored === null ? null : (string) $stored,
+                );
+                $children[$value->getCode()] = $value;
+            }
+            $result[(int) $item['record_id']][(int) $item['field_id']][] = new RepeatedFieldItem(
+                (int) $item['id'],
+                $children,
+            );
+        }
+
+        return $result;
+    }
+
+    /**
+     * Persists one complete ordered item list while changing only submitted values
+     *
+     * @param array<string,mixed> $field
+     * @param list<array{id:int|null,values:array<int,string|null>}> $items
+     */
+    public function saveRepeater(int $typeId, int $recordId, string $locale, array $field, array $items): void
+    {
+        $fieldId = (int) $field['id'];
+        $existing = array_column(
+            $this->database->table('cms_content_repeater_item')
+                ->where('record_id', $recordId)
+                ->where('field_id', $fieldId)
+                ->lockForUpdate()
+                ->getArray(),
+            null,
+            'id',
+        );
+        $children = array_column($field['children'], null, 'id');
+        $translationId = $this->translationId($recordId, $locale);
+        $kept = [];
+        $now = date('Y-m-d H:i:s');
+        foreach ($items as $position => $item) {
+            $itemId = $item['id'];
+            if ($itemId === null) {
+                $this->database->table('cms_content_repeater_item')->insert([
+                    'record_id' => $recordId,
+                    'type_id' => $typeId,
+                    'field_id' => $fieldId,
+                    'sort_order' => $position,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+                $itemId = (int) $this->database->lastInsertId();
+            } elseif ((int) $existing[$itemId]['sort_order'] !== $position) {
+                $this->database->table('cms_content_repeater_item')
+                    ->where('id', $itemId)
+                    ->set(['sort_order' => $position, 'updated_at' => $now])
+                    ->update();
+            }
+            $kept[] = $itemId;
+            foreach ($item['values'] as $childId => $value) {
+                $child = $children[$childId];
+                $localized = (int) $child['localized'] === 1;
+                $table = $localized
+                    ? 'cms_content_repeater_item_translation_value'
+                    : 'cms_content_repeater_item_value';
+                $query = $this->database->table($table)
+                    ->where('item_id', $itemId)
+                    ->where('child_field_id', $childId);
+                $identity = [
+                    'item_id' => $itemId,
+                    'record_id' => $recordId,
+                    'field_id' => $fieldId,
+                    'child_field_id' => $childId,
+                ];
+                if ($localized) {
+                    $query = $query->where('translation_id', $translationId);
+                    $identity['translation_id'] = $translationId;
+                }
+                if ($query->exists()) {
+                    $query->set(['value_text' => $value])->update();
+                } else {
+                    $this->database->table($table)->insert($identity + ['value_text' => $value]);
+                }
+            }
+        }
+        $delete = $this->database->table('cms_content_repeater_item')
+            ->where('record_id', $recordId)
+            ->where('field_id', $fieldId);
+        if ($kept !== []) {
+            $placeholders = implode(', ', array_fill(0, count($kept), '?'));
+            $delete = $delete->whereRaw('id NOT IN (' . $placeholders . ')', $kept);
+        }
+        $delete->delete();
     }
 
     /**

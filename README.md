@@ -13,7 +13,7 @@ without generating separate Composer packages, PHP classes or database tables.
 Definitions use the shared AdminEditor, with drag-and-drop field layout, an
 inspector and Select options. Supported fields are
 text, textarea, rich text, integer, decimal, boolean, date, datetime, select,
-media and relation.
+media, relation and repeatable group.
 Fields support defaults, validation rules, localized values and presentation
 attributes. Definitions, typed values and record relations are stored relationally,
 without JSON persistence; decimal values retain their precision without float conversion.
@@ -36,8 +36,12 @@ file IDs are never duplicated into scalar value tables. Renaming or moving a fie
 preserves its collection. Archiving unregisters its usage without deleting files;
 restoring the definition reconnects the same collection. Relation fields select one
 or more records of a configured Content Type, including the same type. Their links
-are shared across translations and retain selection order. Groups and repeaters are
-not supported.
+are shared across translations and retain selection order. General field groups and
+nested schemas are not supported. The repeatable group is an intentionally limited ordered list.
+Its child schema supports only text, textarea and rich text, without nesting,
+relations or media. Items have stable IDs and one shared order across locales;
+child values may be localized. Definitions, items and values remain relational,
+and archiving a parent or child definition preserves stored content.
 Required relations require an assigned link on publication. New links must point
 to existing authorized targets of the configured type. Later deletion or
 unpublishing of a target preserves the stored link; public reads omit targets that
@@ -100,6 +104,10 @@ $articles = $content->related('article', $articleId, 'related_articles', $locale
 $articlesBySource = $content->relatedForRecords('article', $articleIds, 'related_articles', $locale);
 foreach ($news->getItems() as $item) {
     $description = $item->getField('description')->getValue();
+    foreach ($item->getRepeatedField('sections') as $section) {
+        $sectionTitle = $section->getField('title')->getValue();
+        $sectionContent = $section->getField('content')->getValue();
+    }
     $thumbnail = $item->getThumbnail();
     $gallery = $item->getGallery();
     $attachments = $item->getAttachments();
@@ -162,6 +170,10 @@ for the thumbnail or empty lists for gallery and attachments. Custom media
 fields remain available through `getFieldFiles($code)`, without exposing file
 usage codes to the host. Field values use `RecordFieldValue::getValue()` and
 `getOptionLabel()`.
+Repeatable groups use `PublishedRecord::getRepeatedField($code)`. It returns
+`RepeatedFieldItem` objects in explicit `sort_order`; each item exposes its stable
+ID and typed child `RecordFieldValue` objects. Public reads never expose storage
+rows, and changing the shared item order does not copy localized values.
 
 The host selects languages and Content Types in its existing framework sitemap
 provider. The framework resolves the base URL and writes the XML:

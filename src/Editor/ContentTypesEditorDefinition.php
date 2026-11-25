@@ -68,7 +68,7 @@ final readonly class ContentTypesEditorDefinition
                         'maxlength' => '180',
                         'placeholder' => $locale['code'] === 'cs' ? 'volna-mista' : 'careers',
                     ]),
-                md: 6,
+                md: 4,
             );
         }
 

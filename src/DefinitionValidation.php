@@ -160,7 +160,7 @@ final readonly class DefinitionValidation
      * @param array{fields:list<array<string,mixed>>,rows:list<array<string,mixed>>} $definition
      * @param list<array<string,mixed>> $storedFields
      * @param list<array<string,mixed>> $storedRows
-     * @return list<array{id:int|null,values:array<string,int|string|null>,options:list<array{code:string,name:string}>,row:int|null}>
+     * @return list<array{id:int|null,values:array<string,int|string|null>,options:list<array{code:string,name:string}>,children:list<array{id:int|null,code:string,name:string,kind:string,required:int,localized:int}>,row:int|null}>
      */
     public function prepare(array $definition, array $storedFields, array $storedRows): array
     {
@@ -195,6 +195,9 @@ final readonly class DefinitionValidation
                 $label = is_string($input['name'] ?? null) ? $input['name'] : $key;
                 throw new DefinitionValidationException(['definition' => $label . ': ' . implode(' ', $exception->errors())]);
             }
+            $field['children'] = $field['values']['kind'] === 'repeater'
+                ? $this->repeaterFields($input['children'] ?? null, $id === null ? [] : $existing[$id]['children'])
+                : [];
             $code = (string) $field['values']['code'];
             if (isset($codes[$code])) {
                 $this->fail('definition', 'duplicate');
@@ -229,6 +232,61 @@ final readonly class DefinitionValidation
     }
 
     /**
+     * Validates the intentionally small child schema supported by repeaters
+     *
+     * @param list<array<string,mixed>> $stored
+     * @return list<array{id:int|null,code:string,name:string,kind:string,required:int,localized:int}>
+     */
+    private function repeaterFields(mixed $input, array $stored): array
+    {
+        if (!is_array($input) || !array_is_list($input) || $input === [] || count($input) > 20) {
+            $this->fail('definition', 'repeater_fields');
+        }
+        $storedById = array_column($stored, null, 'id');
+        $seenIds = [];
+        $codes = [];
+        $children = [];
+        foreach ($input as $child) {
+            if (!is_array($child)) {
+                $this->fail('definition', 'repeater_fields');
+            }
+            try {
+                $identity = $this->identity($child);
+            } catch (DefinitionValidationException) {
+                $this->fail('definition', 'repeater_fields');
+            }
+            $id = $child['id'] ?? null;
+            if ($id !== null && (!is_int($id) || !isset($storedById[$id]) || isset($seenIds[$id]))) {
+                $this->fail('definition', 'immutable');
+            }
+            $kind = $this->values->text($child, 'kind');
+            if (!in_array($kind, ['text', 'textarea', 'richtext'], true)) {
+                $this->fail('definition', 'repeater_fields');
+            }
+            if ($id !== null) {
+                $seenIds[$id] = true;
+                if ($identity['code'] !== $storedById[$id]['code'] || $kind !== $storedById[$id]['kind']) {
+                    $this->fail('definition', 'immutable');
+                }
+            }
+            if (isset($codes[$identity['code']])) {
+                $this->fail('definition', 'duplicate');
+            }
+            $codes[$identity['code']] = true;
+            $children[] = [
+                'id' => $id,
+                'code' => $identity['code'],
+                'name' => $identity['name'],
+                'kind' => $kind,
+                'required' => $this->values->boolean($child, 'required'),
+                'localized' => $this->values->boolean($child, 'localized'),
+            ];
+        }
+
+        return $children;
+    }
+
+    /**
      * @param array<string,mixed> $input
      * @param array<string,mixed> $existing
      */
@@ -254,8 +312,8 @@ final readonly class DefinitionValidation
      * @param list<array<string,mixed>> $rows
      * @param list<array<string,mixed>> $storedRows
      * @param array<string,int> $keys
-     * @param list<array{id:int|null,values:array<string,int|string|null>,options:list<array{code:string,name:string}>,row:int|null}> $prepared
-     * @return list<array{id:int|null,values:array<string,int|string|null>,options:list<array{code:string,name:string}>,row:int|null}>
+     * @param list<array{id:int|null,values:array<string,int|string|null>,options:list<array{code:string,name:string}>,children:list<array{id:int|null,code:string,name:string,kind:string,required:int,localized:int}>,row:int|null}> $prepared
+     * @return list<array{id:int|null,values:array<string,int|string|null>,options:list<array{code:string,name:string}>,children:list<array{id:int|null,code:string,name:string,kind:string,required:int,localized:int}>,row:int|null}>
      */
     private function layout(array $rows, array $storedRows, array $keys, array $prepared): array
     {

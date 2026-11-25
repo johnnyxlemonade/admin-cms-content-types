@@ -14,6 +14,7 @@ use Lemonade\Cms\ContentTypes\Field\FieldTypeRegistry;
 use Lemonade\Cms\ContentTypes\Field\FieldValidation;
 use Lemonade\Cms\ContentTypes\Models\DefinitionModel;
 use Lemonade\Cms\ContentTypes\Models\RecordModel;
+use UnexpectedValueException;
 
 /**
  * Validates and persists scalar and relation values for one Content Type
@@ -29,6 +30,11 @@ final class RecordValues implements CmsContentValueWriter
      * @var array<int,array{targetTypeId:int,ids:list<int>}>
      */
     private array $preparedRelations = [];
+
+    /**
+     * @var array<int,list<array{id:int|null,values:array<int,string|null>}>>
+     */
+    private array $preparedRepeaters = [];
 
     /**
      * @var list<array<string,mixed>>
@@ -80,6 +86,7 @@ final class RecordValues implements CmsContentValueWriter
         $globalRequired = $state === CmsPublicationState::Published || $this->model->hasOtherPublishedLocale($id, $locale);
         $this->prepared = [];
         $this->preparedRelations = [];
+        $this->preparedRepeaters = [];
         $errors = [];
         foreach ($this->fields as $field) {
             $fieldId = (int) $field['id'];
@@ -150,13 +157,47 @@ final class RecordValues implements CmsContentValueWriter
                 $errors[$key] = implode(' ', $exception->errors());
             }
         }
+
+        foreach ($this->repeaterFields(lock: true) as $field) {
+            $fieldId = (int) $field['id'];
+            $key = 'field_' . $fieldId;
+            $marker = $input[$key . '_present'] ?? null;
+            try {
+                if ($marker === null) {
+                    if (array_key_exists($key, $input)) {
+                        $this->validation->fail($key, 'invalid');
+                    }
+
+                    continue;
+                }
+                if ($marker !== '1') {
+                    $this->validation->fail($key, 'invalid');
+                }
+                $current = $this->model->repeaterItemsForRecords([$id], $locale, [$field])[$id][$fieldId] ?? [];
+                $items = $this->repeaterInput($input[$key] ?? null, $field, $current, $state, $globalRequired, $key);
+                $currentIds = array_map(static fn($item): int => $item->getId(), $current);
+                $submittedIds = array_values(array_filter(array_column($items, 'id'), is_int(...)));
+                $changed = $currentIds !== $submittedIds;
+                foreach ($items as $item) {
+                    if ($item['id'] === null || $item['values'] !== []) {
+                        $changed = true;
+                    }
+                }
+                if ($changed) {
+                    $this->preparedRepeaters[$fieldId] = $items;
+                }
+            } catch (DefinitionValidationException $exception) {
+                $errors[$key] = implode(' ', $exception->errors());
+            }
+        }
         if ($errors !== []) {
             $this->prepared = [];
             $this->preparedRelations = [];
+            $this->preparedRepeaters = [];
             throw new DefinitionValidationException($errors);
         }
 
-        return $this->prepared !== [] || $this->preparedRelations !== [];
+        return $this->prepared !== [] || $this->preparedRelations !== [] || $this->preparedRepeaters !== [];
     }
 
     /**
@@ -259,6 +300,10 @@ final class RecordValues implements CmsContentValueWriter
         foreach ($this->preparedRelations as $fieldId => $relation) {
             $this->model->saveRelation($id, $this->module->id(), $fieldId, $relation['targetTypeId'], $relation['ids']);
         }
+        $repeaterFields = array_column($this->repeaterFields(), null, 'id');
+        foreach ($this->preparedRepeaters as $fieldId => $items) {
+            $this->model->saveRepeater($this->module->id(), $id, $locale, $repeaterFields[$fieldId], $items);
+        }
     }
 
     /**
@@ -291,6 +336,179 @@ final class RecordValues implements CmsContentValueWriter
     public function relationFields(bool $lock = false): array
     {
         return array_values(array_filter($this->activeFields($lock), static fn(array $field): bool => $field['kind'] === 'relation'));
+    }
+
+    /**
+     * Returns active ordered repeatable fields
+     *
+     * @return list<array<string,mixed>>
+     */
+    public function repeaterFields(bool $lock = false): array
+    {
+        return array_values(array_filter(
+            $this->activeFields($lock),
+            static fn(array $field): bool => $field['kind'] === 'repeater',
+        ));
+    }
+
+    /**
+     * Returns repeatable items for the record editor and preserves valid old input
+     *
+     * @param array<string,mixed> $input
+     * @return array<int,list<array{key:string,id:int|null,values:array<int,string>}>>
+     */
+    public function repeaterEditorItems(int $id, string $locale, array $input = []): array
+    {
+        $fields = $this->repeaterFields();
+        $stored = $this->model->repeaterItemsForRecords([$id], $locale, $fields)[$id] ?? [];
+        $result = [];
+        foreach ($fields as $field) {
+            $fieldId = (int) $field['id'];
+            $key = 'field_' . $fieldId;
+            $submitted = $input[$key] ?? null;
+            if (($input[$key . '_present'] ?? null) === '1' && is_array($submitted)) {
+                $restored = $this->restoreRepeaterInput($submitted, $field);
+                if ($restored !== null) {
+                    $result[$fieldId] = $restored;
+                    continue;
+                }
+            }
+            foreach ($stored[$fieldId] ?? [] as $item) {
+                $values = [];
+                foreach ($item->getFields() as $child) {
+                    $value = $child->getValue();
+                    if ($value !== null && !is_string($value)) {
+                        throw new UnexpectedValueException('Invalid repeated text value.');
+                    }
+                    $values[$child->getId()] = $value ?? '';
+                }
+                $result[$fieldId][] = [
+                    'key' => (string) $item->getId(),
+                    'id' => $item->getId(),
+                    'values' => $values,
+                ];
+            }
+            $result[$fieldId] ??= [];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Validates one submitted ordered item list
+     *
+     * @param array<string,mixed> $field
+     * @param list<\Lemonade\Cms\ContentTypes\Public\RepeatedFieldItem> $current
+     * @return list<array{id:int|null,values:array<int,string|null>}>
+     */
+    private function repeaterInput(
+        mixed $input,
+        array $field,
+        array $current,
+        CmsPublicationState $state,
+        bool $globalRequired,
+        string $key,
+    ): array {
+        if (!is_array($input) || !is_array($input['order'] ?? null) || !array_is_list($input['order']) || !is_array($input['items'] ?? null) || count($input['order']) > 100) {
+            $this->validation->fail($key, 'invalid');
+        }
+        if ($globalRequired && (int) $field['required'] === 1 && $input['order'] === []) {
+            $this->validation->fail($key, 'required');
+        }
+        $children = array_column(array_filter(
+            $field['children'],
+            static fn(array $child): bool => $child['archived_at'] === null,
+        ), null, 'id');
+        $currentById = [];
+        foreach ($current as $currentItem) {
+            $currentById[$currentItem->getId()] = $currentItem;
+        }
+        $seen = [];
+        $prepared = [];
+        foreach ($input['order'] as $token) {
+            if (!is_string($token) || preg_match('/^(?:[1-9][0-9]*|new_[a-zA-Z0-9-]{1,64})$/D', $token) !== 1 || isset($seen[$token])) {
+                $this->validation->fail($key, 'invalid');
+            }
+            $seen[$token] = true;
+            $itemInput = $input['items'][$token] ?? null;
+            if (!is_array($itemInput)) {
+                $this->validation->fail($key, 'invalid');
+            }
+            $itemId = str_starts_with($token, 'new_') ? null : (int) $token;
+            if ($itemId !== null && (!isset($currentById[$itemId]) || (string) ($itemInput['id'] ?? '') !== $token)) {
+                $this->validation->fail($key, 'invalid');
+            }
+            $allowedKeys = ['id'];
+            $changedValues = [];
+            foreach ($children as $childId => $child) {
+                $childKey = 'field_' . $childId;
+                $allowedKeys[] = $childKey;
+                $value = $this->validation->text($itemInput, $childKey);
+                try {
+                    $type = $this->types->get((string) $child['kind']);
+                    $normalized = $type->validate(['default_value' => $value], $this->validation)['values']['default_text'];
+                    if ($normalized !== null && !is_string($normalized)) {
+                        $this->validation->fail($key, 'invalid');
+                    }
+                    $required = (int) $child['localized'] === 1 ? $state === CmsPublicationState::Published : $globalRequired;
+                    if ($required && (int) $child['required'] === 1 && $this->isEmptyValue($normalized)) {
+                        $this->validation->fail($key, 'required');
+                    }
+                } catch (DefinitionValidationException) {
+                    $this->validation->fail($key, 'invalid');
+                }
+                $currentValue = $itemId === null ? null : $currentById[$itemId]->getField((string) $child['code'])->getValue();
+                if ($currentValue !== null && !is_string($currentValue)) {
+                    throw new UnexpectedValueException('Invalid repeated text value.');
+                }
+                if ($itemId === null || ($currentValue ?? '') !== ($normalized ?? '')) {
+                    $changedValues[(int) $childId] = $normalized;
+                }
+            }
+            if (array_diff(array_keys($itemInput), $allowedKeys) !== []) {
+                $this->validation->fail($key, 'invalid');
+            }
+            $prepared[] = ['id' => $itemId, 'values' => $changedValues];
+        }
+        if (count($seen) !== count($input['items'])) {
+            $this->validation->fail($key, 'invalid');
+        }
+
+        return $prepared;
+    }
+
+    /**
+     * Restores submitted items for a validation response without trusting their shape
+     *
+     * @param array<string,mixed> $input
+     * @param array<string,mixed> $field
+     * @return list<array{key:string,id:int|null,values:array<int,string>}>|null
+     */
+    private function restoreRepeaterInput(array $input, array $field): ?array
+    {
+        if (!is_array($input['order'] ?? null) || !array_is_list($input['order']) || !is_array($input['items'] ?? null)) {
+            return null;
+        }
+        $children = array_column($field['children'], null, 'id');
+        $items = [];
+        foreach ($input['order'] as $token) {
+            if (!is_string($token) || !is_array($input['items'][$token] ?? null)) {
+                return null;
+            }
+            $values = [];
+            foreach ($children as $childId => $child) {
+                if ($child['archived_at'] === null) {
+                    $values[(int) $childId] = $this->validation->text($input['items'][$token], 'field_' . $childId);
+                }
+            }
+            $items[] = [
+                'key' => $token,
+                'id' => ctype_digit($token) ? (int) $token : null,
+                'values' => $values,
+            ];
+        }
+
+        return $items;
     }
 
     /**

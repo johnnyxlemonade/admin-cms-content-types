@@ -117,6 +117,18 @@ final readonly class DefinitionService
                         && $this->model->fieldHasValues($field['id'])) {
                         $this->validation->fail('definition', 'localized_in_use');
                     }
+                    if ($field['values']['kind'] === 'repeater' && $field['id'] !== null) {
+                        $previousChildren = array_column($storedById[$field['id']]['children'], null, 'id');
+                        foreach ($field['children'] as $child) {
+                            if ($child['id'] === null || !isset($previousChildren[$child['id']])) {
+                                continue;
+                            }
+                            $localizedChanged = (int) $previousChildren[$child['id']]['localized'] !== $child['localized'];
+                            if ($localizedChanged && $this->model->repeaterFieldHasValues($child['id'])) {
+                                $this->validation->fail('definition', 'localized_in_use');
+                            }
+                        }
+                    }
                 }
                 $typeId = $id ?? $this->model->createType($values);
                 if ($existing === null && $this->permissions !== null) {
@@ -132,6 +144,9 @@ final readonly class DefinitionService
                     $attributes['row_id'] = $field['row'] === null ? null : $rowIds[$field['row']];
                     $fieldId = $this->model->saveField($typeId, $field['id'], $attributes);
                     $this->model->saveOptions($fieldId, $field['options']);
+                    if ($field['values']['kind'] === 'repeater') {
+                        $this->model->saveRepeaterFields($fieldId, $field['children']);
+                    }
                 }
                 if ($existing !== null) {
                     $this->model->updateType($typeId, $values, (int) $existing['revision']);

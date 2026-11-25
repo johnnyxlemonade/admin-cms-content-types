@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 return [
     'relations' => ['move_earlier' => 'Posunout výše', 'move_later' => 'Posunout níže'],
+    'repeater' => [
+        'add' => 'Přidat položku',
+        'remove' => 'Odebrat položku',
+        'move' => 'Přetažením změnit pořadí položky',
+        'empty' => 'Zatím tu nejsou žádné položky.',
+    ],
     'module' => [
         'name' => 'Obsahové záznamy',
         'description' => 'Správa obsahových záznamů a jejich publikace.',

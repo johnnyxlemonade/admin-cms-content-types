@@ -24,7 +24,7 @@ $kinds = [];
 foreach (array_keys($inspectors) as $kind) {
     $kinds[$kind] = $helpers->lang('content-types.kinds.' . $kind);
 }
-$icons = ['image' => 'image', 'gallery' => 'images', 'file' => 'file-earmark', 'files' => 'files', 'text' => 'type', 'textarea' => 'text-left', 'richtext' => 'paragraph', 'integer' => '123', 'decimal' => '123', 'boolean' => 'toggle-on', 'date' => 'calendar3', 'datetime' => 'calendar-week', 'select' => 'card-list', 'relation' => 'link-45deg'];
+$icons = ['image' => 'image', 'gallery' => 'images', 'file' => 'file-earmark', 'files' => 'files', 'text' => 'type', 'textarea' => 'text-left', 'richtext' => 'paragraph', 'integer' => '123', 'decimal' => '123', 'boolean' => 'toggle-on', 'date' => 'calendar3', 'datetime' => 'calendar-week', 'select' => 'card-list', 'relation' => 'link-45deg', 'repeater' => 'list-ul'];
 ?>
 <div class="lm-field-builder" data-lemonade-field-builder data-input="definition" data-name-input="name" data-code-input="code" data-translation-prefix="content-types" data-labels="<?= e(json_encode($labels, JSON_THROW_ON_ERROR)) ?>" data-kinds="<?= e(json_encode($kinds, JSON_THROW_ON_ERROR)) ?>" data-icons="<?= e(json_encode($icons, JSON_THROW_ON_ERROR)) ?>">
     <div class="lm-field-builder-columns">
@@ -133,6 +133,31 @@ $icons = ['image' => 'image', 'gallery' => 'images', 'file' => 'file-earmark', '
                 <?php foreach (['up' => ['arrow-up', 'move_up'], 'down' => ['arrow-down', 'move_down'], 'remove' => ['trash', 'remove']] as $action => [$icon, $labelKey]): ?>
                     <button type="button" class="btn lm-field-builder-icon-button" data-option-<?= e($action) ?> title="<?= e($helpers->lang('content-types.builder.' . $labelKey)) ?>" data-lemonade-i18n-title="content-types.builder.<?= e($labelKey) ?>"><i class="bi bi-<?= e($icon) ?>" aria-hidden="true"></i><span class="visually-hidden" data-lemonade-i18n="content-types.builder.<?= e($labelKey) ?>"><?= e($helpers->lang('content-types.builder.' . $labelKey)) ?></span></button>
                 <?php endforeach ?>
+            </div>
+        </div>
+    </template>
+    <template data-builder-repeater-field-template>
+        <div class="lm-form-editor-option-row lm-field-builder-option" data-lemonade-sortable-item>
+            <button type="button" class="btn lm-field-builder-icon-button" data-lemonade-sortable-handle data-option-handle aria-label="<?= e($helpers->lang('content-types.builder.move_help')) ?>" data-lemonade-i18n-aria-label="content-types.builder.move_help"><i class="bi bi-grip-vertical" aria-hidden="true"></i></button>
+            <div class="lm-field-builder-option-control">
+                <?= $adminEditorFields->render(Field::text('name', labelKey: 'content-types.fields.name')->required(), $context, 'builder-repeater-field') ?>
+            </div>
+            <div class="lm-field-builder-option-control">
+                <?= $adminEditorFields->render(Field::text('code', labelKey: 'content-types.fields.code')->required(), $context, 'builder-repeater-field') ?>
+            </div>
+            <div class="lm-field-builder-option-control">
+                <?= $adminEditorFields->render(Field::select('kind', labelKey: 'content-types.fields.kind')->options([
+                    'text' => $helpers->lang('content-types.kinds.text'),
+                    'textarea' => $helpers->lang('content-types.kinds.textarea'),
+                    'richtext' => $helpers->lang('content-types.kinds.richtext'),
+                ]), $context, 'builder-repeater-field') ?>
+            </div>
+            <div class="lm-field-builder-option-control">
+                <?= $adminEditorFields->render(Field::toggle('localized', labelKey: 'content-types.fields.localized'), $context, 'builder-repeater-field') ?>
+                <?= $adminEditorFields->render(Field::toggle('required', labelKey: 'content-types.fields.required'), $context, 'builder-repeater-field') ?>
+            </div>
+            <div class="lm-field-builder-option-actions">
+                <button type="button" class="btn lm-field-builder-icon-button" data-option-remove title="<?= e($helpers->lang('content-types.builder.remove')) ?>" data-lemonade-i18n-title="content-types.builder.remove"><i class="bi bi-trash" aria-hidden="true"></i><span class="visually-hidden" data-lemonade-i18n="content-types.builder.remove"><?= e($helpers->lang('content-types.builder.remove')) ?></span></button>
             </div>
         </div>
     </template>

@@ -76,6 +76,14 @@ final readonly class FieldTypeRegistry
     }
 
     /**
+     * Reports whether a field stores ordered child items
+     */
+    public static function isRepeater(string $kind): bool
+    {
+        return $kind === 'repeater';
+    }
+
+    /**
      * @return list<string>
      */
     public function codes(): array
@@ -137,7 +145,7 @@ final readonly class FieldTypeRegistry
                 Field::text('name', labelKey: 'content-types.fields.name')->required()->attributes(['maxlength' => '180']),
                 Field::text('code', labelKey: 'content-types.fields.code')->help('', 'content-types.editor.code_help')->attributes(['maxlength' => '64']),
             ];
-            if ($scalar || $relation) {
+            if ($scalar || $relation || self::isRepeater($code)) {
                 $controls[] = Field::toggle('required', labelKey: 'content-types.fields.required');
             }
             if ($scalar) {
@@ -248,6 +256,21 @@ final readonly class FieldTypeRegistry
             }
         }
         $field['options'] = $options;
+        if (self::isRepeater((string) $field['kind'])) {
+            $field['children'] = array_map(static fn(array $child): array => [
+                'id' => (int) $child['id'],
+                'code' => (string) $child['code'],
+                'name' => (string) $child['name'],
+                'kind' => (string) $child['kind'],
+                'required' => (int) $child['required'],
+                'localized' => (int) $child['localized'],
+            ], array_values(array_filter(
+                $field['children'],
+                static fn(array $child): bool => $child['archived_at'] === null,
+            )));
+        } else {
+            unset($field['children']);
+        }
         return $field;
     }
 }

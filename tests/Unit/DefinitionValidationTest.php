@@ -64,7 +64,6 @@ final class DefinitionValidationTest extends DefinitionTestCase
         yield 'empty name' => [['name' => ' ']];
         yield 'invalid code' => [['code' => 'bad-code']];
         yield 'long code' => [['code' => str_repeat('a', 65)]];
-        yield 'unsupported kind' => [['kind' => 'repeater']];
         yield 'irrelevant rule' => [['min_number' => '1']];
         yield 'length range' => [['min_length' => '5', 'max_length' => '2']];
         yield 'short default' => [['min_length' => '5', 'default_value' => 'Hi']];
@@ -110,6 +109,64 @@ final class DefinitionValidationTest extends DefinitionTestCase
         $result = $this->validation()->field(['name' => 'Contract', 'kind' => 'select', 'sort_order' => 0, 'default_value' => 'part', 'options' => [['code' => 'full', 'name' => 'Full time'], ['code' => 'part', 'name' => 'Part time']]]);
         self::assertSame(['full', 'part'], array_column($result['options'], 'code'));
         self::assertSame('part', $result['values']['default_option']);
+    }
+
+    public function testRepeaterAcceptsOnlyOrderedTextChildren(): void
+    {
+        $definition = [
+            'fields' => [[
+                'key' => 'sections',
+                'name' => 'Sections',
+                'code' => 'sections',
+                'kind' => 'repeater',
+                'required' => 1,
+                'children' => [
+                    ['name' => 'Title', 'code' => 'title', 'kind' => 'text', 'localized' => 1, 'required' => 1],
+                    ['name' => 'Content', 'code' => 'content', 'kind' => 'richtext', 'localized' => 1, 'required' => 0],
+                    ['name' => 'Note', 'code' => 'note', 'kind' => 'textarea', 'localized' => 0, 'required' => 0],
+                ],
+            ]],
+            'rows' => [['columns' => [['field' => 'sections', 'span' => 12]]]],
+        ];
+
+        $field = $this->validation()->prepare($definition, [], [])[0];
+
+        self::assertSame('repeater', $field['values']['kind']);
+        self::assertSame(0, $field['values']['localized']);
+        self::assertSame(['title', 'content', 'note'], array_column($field['children'], 'code'));
+        self::assertSame(['text', 'richtext', 'textarea'], array_column($field['children'], 'kind'));
+    }
+
+    /**
+     * @return iterable<string,array{list<array<string,mixed>>}>
+     */
+    public static function invalidRepeaterChildren(): iterable
+    {
+        yield 'empty' => [[]];
+        yield 'nested repeater' => [[['name' => 'Nested', 'code' => 'nested', 'kind' => 'repeater']]];
+        yield 'media' => [[['name' => 'Image', 'code' => 'image', 'kind' => 'image']]];
+        yield 'relation' => [[['name' => 'Relation', 'code' => 'relation', 'kind' => 'relation']]];
+        yield 'duplicate code' => [[
+            ['name' => 'First', 'code' => 'same', 'kind' => 'text'],
+            ['name' => 'Second', 'code' => 'same', 'kind' => 'textarea'],
+        ]];
+    }
+
+    /** @param list<array<string,mixed>> $children */
+    #[DataProvider('invalidRepeaterChildren')]
+    public function testInvalidRepeaterChildrenAreRejected(array $children): void
+    {
+        $this->expectException(DefinitionValidationException::class);
+        $this->validation()->prepare([
+            'fields' => [[
+                'key' => 'sections',
+                'name' => 'Sections',
+                'code' => 'sections',
+                'kind' => 'repeater',
+                'children' => $children,
+            ]],
+            'rows' => [['columns' => [['field' => 'sections', 'span' => 12]]]],
+        ], [], []);
     }
 
     public function testPresentationAttributesAreOptionalAndNormalized(): void

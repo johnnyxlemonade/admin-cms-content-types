@@ -101,7 +101,7 @@ final class PublishedRecordReadModel
         $fields = array_column($this->fields($type), null, 'code');
         foreach ($filters as $code => $value) {
             $field = $fields[$code] ?? null;
-            if ($field === null) {
+            if ($field === null || $this->fieldTypes->get((string) $field['kind'])->storage() === null) {
                 throw new InvalidArgumentException('Unknown scalar field filter: ' . $code);
             }
         }
@@ -130,7 +130,10 @@ final class PublishedRecordReadModel
             }
         }
         foreach ($ranges as $code => $bounds) {
-            if ($code !== 'publishedAt' && !isset($fields[$code])) {
+            if ($code !== 'publishedAt' && (
+                !isset($fields[$code])
+                || $this->fieldTypes->get((string) $fields[$code]['kind'])->storage() === null
+            )) {
                 throw new InvalidArgumentException('Unknown range field: ' . $code);
             }
             if (array_diff(array_keys($bounds), ['from', 'to']) !== []) {
@@ -548,6 +551,11 @@ final class PublishedRecordReadModel
         $language = $locale->getLocale() ?? throw new \LogicException('Missing public locale.');
         $ids = array_map(static fn(array $row): int => (int) $row['id'], $rows);
         $values = $this->records->fieldValues($type->id(), $ids, $language, $this->fields($type));
+        $repeaterDefinitions = array_values(array_filter(
+            $this->fields($type),
+            static fn(array $field): bool => $field['kind'] === 'repeater' && $field['archived_at'] === null,
+        ));
+        $repeaterItems = $this->records->repeaterItemsForRecords($ids, $language, $repeaterDefinitions);
         $usages = $this->mediaUsages($type);
         $media = [];
         foreach ($this->files->listForEntitiesUsages($type->code(), $ids, array_keys($usages)) as $file) {
@@ -581,6 +589,10 @@ final class PublishedRecordReadModel
             foreach ($values[$id] ?? [] as $field) {
                 $fields[$field->getCode()] = $field;
             }
+            $repeatedFields = [];
+            foreach ($repeaterDefinitions as $definition) {
+                $repeatedFields[(string) $definition['code']] = $repeaterItems[$id][(int) $definition['id']] ?? [];
+            }
             $path = $row['canonical_path'];
             $url = $path === null ? null : $this->urls->build($locale, $language, (string) $path);
             $recordFiles = $media[$id] ?? [];
@@ -600,6 +612,7 @@ final class PublishedRecordReadModel
                 updatedAt: new DateTimeImmutable((string) $row['translation_updated_at']),
                 publicUrl: $url,
                 fields: $fields,
+                repeatedFields: $repeatedFields,
                 thumbnail: (bool) $row['show_thumbnail'] ? ($recordFiles['thumbnail'][0] ?? null) : null,
                 gallery: $recordFiles['gallery'] ?? [],
                 attachments: $recordFiles['attachment'] ?? [],

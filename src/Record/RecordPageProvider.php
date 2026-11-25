@@ -151,6 +151,7 @@ final readonly class RecordPageProvider implements ModuleIndexPageProviderInterf
                     otherPublishedLocale: $otherPublishedLocale,
                     context: $context,
                     oldInput: $input,
+                    errors: $errors,
                 ),
                 'adminEditorContext' => new AdminEditorRenderContext(
                     values: $this->editorValues($article, $selectedLocale['code']),
@@ -170,6 +171,7 @@ final readonly class RecordPageProvider implements ModuleIndexPageProviderInterf
      *
      * @param array<string,mixed> $article
      * @param array<string,mixed> $oldInput
+     * @param array<string,string> $errors
      */
     private function editorDefinition(
         array $article,
@@ -177,6 +179,7 @@ final readonly class RecordPageProvider implements ModuleIndexPageProviderInterf
         bool $otherPublishedLocale,
         AdminEditorHeaderContextDefinition $context,
         array $oldInput,
+        array $errors,
     ): AdminEditorDefinition {
         $ownerId = $article['owner_id'] === null ? null : (int) $article['owner_id'];
         $canAssignOwner = $this->authorization->hasPermission($this->module->code() . '.assign_owner')
@@ -242,6 +245,7 @@ final readonly class RecordPageProvider implements ModuleIndexPageProviderInterf
                 ? $this->content->tagNamesForLocale($contentLocale)
                 : [],
             oldInput: $oldInput,
+            errors: $errors,
         );
     }
 

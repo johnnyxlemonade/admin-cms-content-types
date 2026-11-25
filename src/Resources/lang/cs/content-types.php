@@ -73,6 +73,7 @@ return [
     'fields' => [
         'name' => 'Název',
         'code' => 'Technický klíč',
+        'kind' => 'Typ pole',
         'description' => 'Popis',
         'enabled' => 'Aktivní',
         'thumbnail_enabled' => 'Hlavní obrázek',
@@ -138,6 +139,7 @@ return [
         'datetime' => 'Datum a čas',
         'select' => 'Výběr z možností',
         'relation' => 'Relace',
+        'repeater' => 'Opakovatelná skupina',
     ],
     'builder' => [
         'edit_width' => 'Upravit šířku pole',
@@ -150,6 +152,8 @@ return [
         'remove_field' => 'Odebrat pole',
         'restore' => 'Obnovit pole',
         'options' => 'Upravit možnosti',
+        'repeater_fields' => 'Upravit vnitřní pole',
+        'add_repeater_field' => 'Přidat vnitřní pole',
         'add_option' => 'Přidat možnost',
         'remove' => 'Odebrat',
         'apply' => 'Použít možnosti',
@@ -161,6 +165,7 @@ return [
         'move_up' => 'Posunout výše',
         'move_down' => 'Posunout níže',
         'invalid_options' => 'Vyplňte název a jedinečný klíč každé možnosti. Klíč začíná malým písmenem a obsahuje jen malá písmena bez diakritiky, čísla a podtržítka.',
+        'invalid_repeater_fields' => 'Přidejte alespoň jedno vnitřní pole s názvem a jedinečným klíčem.',
         'palette_help' => 'Přetáhněte pole do rozložení nebo je přidejte kliknutím.',
         'layout_help' => 'Uspořádejte pole přetažením a nastavte jejich šířku.',
         'inspector_help' => 'Upravte vlastnosti vybraného pole.',
@@ -198,5 +203,6 @@ return [
         'css_class' => 'CSS třídy mohou obsahovat písmena bez diakritiky, čísla, pomlčky a podtržítka. Oddělujte je mezerami (nejvýše 255 znaků).',
         'html_id' => 'HTML ID musí začínat písmenem a obsahovat pouze písmena bez diakritiky, čísla, pomlčky a podtržítka (nejvýše 128 znaků).',
         'duplicate_html_id' => 'HTML ID se v tomto formuláři již používá, včetně automaticky odvozených ID.',
+        'repeater_fields' => 'Opakovatelná skupina potřebuje 1 až 20 vnitřních polí typu text, víceřádkový text nebo formátovaný text.',
     ],
 ];

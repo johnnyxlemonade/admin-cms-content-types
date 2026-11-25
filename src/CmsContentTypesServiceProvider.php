@@ -29,6 +29,7 @@ use Lemonade\Cms\ContentTypes\Field\Types\GalleryFieldType;
 use Lemonade\Cms\ContentTypes\Field\Types\ImageFieldType;
 use Lemonade\Cms\ContentTypes\Field\Types\IntegerFieldType;
 use Lemonade\Cms\ContentTypes\Field\Types\RelationFieldType;
+use Lemonade\Cms\ContentTypes\Field\Types\RepeaterFieldType;
 use Lemonade\Cms\ContentTypes\Field\Types\RichTextFieldType;
 use Lemonade\Cms\ContentTypes\Field\Types\SelectFieldType;
 use Lemonade\Cms\ContentTypes\Field\Types\TextareaFieldType;
@@ -72,7 +73,7 @@ final readonly class CmsContentTypesServiceProvider implements ServiceProviderIn
             new FileFieldType(),
             new FilesFieldType(),
             new RelationFieldType(),
-
+            new RepeaterFieldType(),
         ]));
         $container->scoped('content-types.create', static fn(ContainerInterface $container): StandardEditorAction => StandardEditorAction::create($container->get(EditorDispatcher::class), ModuleManifest::CODE));
         $container->scoped('content-types.save', static fn(ContainerInterface $container): StandardEditorAction => StandardEditorAction::save($container->get(EditorDispatcher::class), ModuleManifest::CODE));

@@ -52,6 +52,7 @@ final readonly class RecordEditorDefinition
      * @param array<int,AdminFileUploadCollection> $mediaUploads
      * @param list<string> $tagOptions
      * @param array<string,mixed> $oldInput
+     * @param array<string,string> $errors
      */
     public function create(
         array $article,
@@ -67,6 +68,7 @@ final readonly class RecordEditorDefinition
         ?AdminFileUploadCollection $thumbnailUpload = null,
         array $tagOptions = [],
         array $oldInput = [],
+        array $errors = [],
     ): AdminEditorDefinition {
         $segment = $this->module->segment();
         $params = ['module' => $segment, 'id' => (int) $article['id'], 'locale' => $contentLocale];
@@ -113,6 +115,7 @@ final readonly class RecordEditorDefinition
             otherPublishedLocale: $otherPublishedLocale,
             mediaUploads: $mediaUploads,
             oldInput: $oldInput,
+            errors: $errors,
         );
         if ($contentFields !== null) {
             $contentBlocks[] = $contentFields;
@@ -168,6 +171,7 @@ final readonly class RecordEditorDefinition
     /**
      * @param array<int,AdminFileUploadCollection> $mediaUploads
      * @param array<string,mixed> $oldInput
+     * @param array<string,string> $errors
      */
     private function contentFields(
         int $articleId,
@@ -177,10 +181,12 @@ final readonly class RecordEditorDefinition
         bool $otherPublishedLocale,
         array $mediaUploads,
         array $oldInput,
+        array $errors,
     ): ?SectionBlock {
         $rows = [];
         $presenceFields = [];
         $relationOptions = $this->values->relationOptionsWithInput($articleId, $locale, $oldInput);
+        $repeaterItems = $this->values->repeaterEditorItems($articleId, $locale, $oldInput);
         foreach ($this->values->activeFields() as $definition) {
             if ($definition['kind'] === 'relation') {
                 $fieldId = (int) $definition['id'];
@@ -221,6 +227,18 @@ final readonly class RecordEditorDefinition
                     ->required($required)
                     ->attributes($attributes);
                 $presenceFields[] = Field::hidden('field_' . $fieldId . '_present')->defaultValue('1');
+            } elseif (FieldTypeRegistry::isRepeater((string) $definition['kind'])) {
+                $fieldId = (int) $definition['id'];
+                $field = new CustomViewBlock('content-types::repeater-field', [
+                    'definition' => $definition,
+                    'items' => $repeaterItems[$fieldId] ?? [],
+                    'errors' => isset($errors['field_' . $fieldId]) ? [$errors['field_' . $fieldId]] : [],
+                    'moduleCode' => $this->module->code(),
+                    'recordId' => $articleId,
+                    'publicationState' => $publicationState,
+                    'canPublish' => $canPublish,
+                    'otherPublishedLocale' => $otherPublishedLocale,
+                ]);
             } elseif (FieldTypeRegistry::isMedia((string) $definition['kind'])) {
                 $field = new CustomViewBlock('content-types::media-field', [
                     'definition' => $definition,

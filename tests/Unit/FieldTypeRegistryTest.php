@@ -15,7 +15,7 @@ final class FieldTypeRegistryTest extends DefinitionTestCase
     public function testRegistryProvidesAllControlsAndRulesWithoutDuplicateCommonFields(): void
     {
         $types = $this->types();
-        self::assertSame(['text', 'textarea', 'richtext', 'integer', 'decimal', 'boolean', 'date', 'datetime', 'select', 'image', 'gallery', 'file', 'files', 'relation'], $types->codes());
+        self::assertSame(['text', 'textarea', 'richtext', 'integer', 'decimal', 'boolean', 'date', 'datetime', 'select', 'image', 'gallery', 'file', 'files', 'relation', 'repeater'], $types->codes());
         self::assertSame($types->codes(), array_keys($types->inspectors()));
         foreach ($types->inspectors() as $code => $controls) {
             $names = array_map(static fn($control): string => $control->name(), $controls);
@@ -40,6 +40,10 @@ final class FieldTypeRegistryTest extends DefinitionTestCase
                         self::assertTrue($control->isRequired());
                     }
                 }
+                self::assertNotContains('localized', $names);
+                self::assertNotContains('default_value', $names);
+            } elseif ($code === 'repeater') {
+                self::assertContains('required', $names);
                 self::assertNotContains('localized', $names);
                 self::assertNotContains('default_value', $names);
             } else {

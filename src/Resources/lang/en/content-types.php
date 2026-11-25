@@ -73,6 +73,7 @@ return [
     'fields' => [
         'name' => 'Name',
         'code' => 'Technical key',
+        'kind' => 'Field type',
         'description' => 'Description',
         'enabled' => 'Active',
         'thumbnail_enabled' => 'Main image',
@@ -138,6 +139,7 @@ return [
         'datetime' => 'Date and time',
         'select' => 'Select',
         'relation' => 'Relation',
+        'repeater' => 'Repeatable group',
     ],
     'builder' => [
         'edit_width' => 'Edit field width',
@@ -150,6 +152,8 @@ return [
         'remove_field' => 'Remove field',
         'restore' => 'Restore field',
         'options' => 'Edit options',
+        'repeater_fields' => 'Edit child fields',
+        'add_repeater_field' => 'Add child field',
         'add_option' => 'Add option',
         'remove' => 'Remove',
         'apply' => 'Apply options',
@@ -161,6 +165,7 @@ return [
         'move_up' => 'Move up',
         'move_down' => 'Move down',
         'invalid_options' => 'Enter a name and unique key for every option. Keys must start with a lowercase letter and contain only lowercase ASCII letters, digits and underscores.',
+        'invalid_repeater_fields' => 'Add at least one child field with a name and unique key.',
         'palette_help' => 'Drag a field onto the layout or click to add it.',
         'layout_help' => 'Drag fields to arrange them and adjust their widths.',
         'inspector_help' => 'Edit the selected field’s properties.',
@@ -198,5 +203,6 @@ return [
         'css_class' => 'CSS classes may contain ASCII letters, digits, hyphens and underscores. Separate them with spaces (255 characters maximum).',
         'html_id' => 'HTML ID must start with a letter and contain only ASCII letters, digits, hyphens and underscores (128 characters maximum).',
         'duplicate_html_id' => 'This HTML ID is already used in the form, including automatically generated IDs.',
+        'repeater_fields' => 'A repeatable group needs between 1 and 20 text, multiline text or rich text child fields.',
     ],
 ];

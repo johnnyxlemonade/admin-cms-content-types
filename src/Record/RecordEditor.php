@@ -63,6 +63,10 @@ final readonly class RecordEditor implements
             $contentFields[] = new EditorFieldDefinition('field_' . $field['id'], 'text', false, null);
             $contentFields[] = new EditorFieldDefinition('field_' . $field['id'] . '_present', 'text', false, null);
         }
+        foreach ($this->values->repeaterFields() as $field) {
+            $contentFields[] = new EditorFieldDefinition('field_' . $field['id'], 'text', false, null);
+            $contentFields[] = new EditorFieldDefinition('field_' . $field['id'] . '_present', 'text', false, null);
+        }
 
         return new EditorDefinition(
             loadPermission: $this->module->code() . '.view_own',
@@ -158,6 +162,10 @@ final readonly class RecordEditor implements
             $schema->field('field_' . $field['id'], (string) $field['name']);
         }
         foreach ($this->values->relationFields() as $field) {
+            $schema->field('field_' . $field['id'], (string) $field['name']);
+            $schema->field('field_' . $field['id'] . '_present');
+        }
+        foreach ($this->values->repeaterFields() as $field) {
             $schema->field('field_' . $field['id'], (string) $field['name']);
             $schema->field('field_' . $field['id'] . '_present');
         }

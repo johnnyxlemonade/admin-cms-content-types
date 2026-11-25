@@ -55,16 +55,27 @@ final readonly class DefinitionModel
         $query = $this->database->table('cms_content_field')->where('type_id', $id)->orderBy('sort_order', 'ASC')->orderBy('id', 'ASC');
         $fields = ($lock ? $query->lockForUpdate() : $query)->getArray();
         $options = [];
+        $children = [];
         if ($fields !== []) {
+            $fieldIds = array_map(static fn(array $field): int => (int) $field['id'], $fields);
             $optionQuery = $this->database->table('cms_content_field_option')
-                ->whereIn('field_id', array_map(static fn(array $field): int => (int) $field['id'], $fields))
+                ->whereIn('field_id', $fieldIds)
                 ->orderBy('sort_order', 'ASC')->orderBy('id', 'ASC');
             foreach (($lock ? $optionQuery->lockForUpdate() : $optionQuery)->getArray() as $option) {
                 $options[(int) $option['field_id']][] = $option;
             }
+            if ($this->database->tableExists('cms_content_repeater_field')) {
+                $childQuery = $this->database->table('cms_content_repeater_field')
+                    ->whereIn('field_id', $fieldIds)
+                    ->orderBy('sort_order', 'ASC')->orderBy('id', 'ASC');
+                foreach (($lock ? $childQuery->lockForUpdate() : $childQuery)->getArray() as $child) {
+                    $children[(int) $child['field_id']][] = $child;
+                }
+            }
         }
         foreach ($fields as &$field) {
             $field['options'] = $options[(int) $field['id']] ?? [];
+            $field['children'] = $children[(int) $field['id']] ?? [];
         }
         unset($field);
 
@@ -206,6 +217,74 @@ final readonly class DefinitionModel
                 $this->database->table('cms_content_field_option')->insert($values + ['field_id' => $fieldId, 'created_at' => $now]);
             }
         }
+    }
+
+    /**
+     * Synchronizes child definitions without deleting historical values
+     *
+     * @param list<array{id:int|null,code:string,name:string,kind:string,required:int,localized:int}> $children
+     */
+    public function saveRepeaterFields(int $fieldId, array $children): void
+    {
+        $existing = array_column($this->repeaterFields($fieldId), null, 'id');
+        $now = date('Y-m-d H:i:s');
+        $this->database->table('cms_content_repeater_field')
+            ->where('field_id', $fieldId)
+            ->where('archived_at', null)
+            ->set(['archived_at' => $now, 'updated_at' => $now])
+            ->update();
+        foreach ($children as $position => $child) {
+            $values = [
+                'code' => $child['code'],
+                'name' => $child['name'],
+                'kind' => $child['kind'],
+                'required' => $child['required'],
+                'localized' => $child['localized'],
+                'sort_order' => $position,
+                'archived_at' => null,
+                'updated_at' => $now,
+            ];
+            if ($child['id'] !== null && isset($existing[$child['id']])) {
+                $this->database->table('cms_content_repeater_field')
+                    ->where('id', $child['id'])
+                    ->where('field_id', $fieldId)
+                    ->set($values)
+                    ->update();
+
+                continue;
+            }
+            $this->database->table('cms_content_repeater_field')->insert(
+                $values + ['field_id' => $fieldId, 'created_at' => $now],
+            );
+        }
+    }
+
+    /**
+     * Returns all child definitions including archived ones
+     *
+     * @return list<array<string,mixed>>
+     */
+    public function repeaterFields(int $fieldId): array
+    {
+        return $this->database->table('cms_content_repeater_field')
+            ->where('field_id', $fieldId)
+            ->orderBy('sort_order', 'ASC')
+            ->orderBy('id', 'ASC')
+            ->getArray();
+    }
+
+    /**
+     * Reports whether a child definition has any stored values
+     */
+    public function repeaterFieldHasValues(int $childFieldId): bool
+    {
+        foreach (['cms_content_repeater_item_value', 'cms_content_repeater_item_translation_value'] as $table) {
+            if ($this->database->table($table)->where('child_field_id', $childFieldId)->exists()) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function fieldHasValues(int $fieldId): bool
