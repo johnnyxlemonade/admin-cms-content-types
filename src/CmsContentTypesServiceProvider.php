@@ -12,6 +12,7 @@ use Lemonade\Admin\DataGrid\DataGridRegistry;
 use Lemonade\Admin\Editor\EditorDispatcher;
 use Lemonade\Admin\Editor\EditorRegistry;
 use Lemonade\Admin\Localization\ClientTranslationGroupRegistry;
+use Lemonade\Admin\Module\AdminModuleContributionLoader;
 use Lemonade\Admin\Page\ModulePageRegistry;
 use Lemonade\Admin\Routing\AdminRouteRegistrarRegistry;
 use Lemonade\Cms\ContentTypes\Actions\SetDeletedAction;
@@ -35,7 +36,10 @@ use Lemonade\Cms\ContentTypes\Field\Types\SelectFieldType;
 use Lemonade\Cms\ContentTypes\Field\Types\TextareaFieldType;
 use Lemonade\Cms\ContentTypes\Field\Types\TextFieldType;
 use Lemonade\Cms\ContentTypes\Models\ContentTypeModel;
+use Lemonade\Cms\ContentTypes\Models\DefinitionModel;
+use Lemonade\Cms\ContentTypes\Models\RecordModel;
 use Lemonade\Cms\ContentTypes\Public\PublishedRecordReadModel;
+use Lemonade\Cms\ContentTypes\Record\ContentTypeBootstrapSnapshot;
 use Lemonade\Cms\ContentTypes\Record\RecordProviderFactory;
 use Lemonade\Cms\ContentTypes\Record\RecordRegistration;
 use Lemonade\Cms\ContentTypes\Record\RelationOptionsController;
@@ -44,6 +48,9 @@ use Lemonade\Framework\Container\ContainerBuilderInterface;
 use Lemonade\Framework\Container\ContainerInterface;
 use Lemonade\Framework\Core\BootableServiceProviderInterface;
 use Lemonade\Framework\Core\ServiceProviderInterface;
+use Lemonade\Framework\Database\Config\DatabaseRuntimeConfig;
+use Lemonade\Framework\Database\Database;
+use Lemonade\Framework\Database\DatabaseDriverInterface;
 use Lemonade\Framework\Localization\TranslationResourceRegistry;
 use Lemonade\Framework\View\ViewResourceRegistry;
 
@@ -57,6 +64,16 @@ final readonly class CmsContentTypesServiceProvider implements ServiceProviderIn
         $container->scoped(RecordProviderFactory::class, static fn(ContainerInterface $scope): RecordProviderFactory => new RecordProviderFactory($scope));
         $container->scoped(RelationOptionsController::class, RelationOptionsController::class);
         $container->scoped(PublishedRecordReadModel::class, PublishedRecordReadModel::class);
+        $container->scoped(ContentTypeBootstrapSnapshot::class, self::snapshot(...));
+        $container->scoped(DefinitionModel::class, fn(ContainerInterface $scope): DefinitionModel => new DefinitionModel(
+            $scope->get(Database::class),
+            $scope->get(ContentTypeBootstrapSnapshot::class)->fields(),
+        ));
+        $container->scoped(RecordModel::class, fn(ContainerInterface $scope): RecordModel => new RecordModel(
+            $scope->get(Database::class),
+            $scope->get(FieldTypeRegistry::class),
+            $scope->get(ContentTypeBootstrapSnapshot::class)->modules(),
+        ));
         $container->singleton(RelationOptionsRouteRegistrar::class, RelationOptionsRouteRegistrar::class);
         $container->singleton(FieldTypeRegistry::class, static fn(): FieldTypeRegistry => new FieldTypeRegistry([
             new TextFieldType(),
@@ -111,8 +128,44 @@ final readonly class CmsContentTypesServiceProvider implements ServiceProviderIn
         }
         $container->get(ClientTranslationGroupRegistry::class)->register('content-types');
         $container->get(ClientTranslationGroupRegistry::class)->register('records');
-        RecordRegistration::boot($container);
+        $container->get(AdminModuleContributionLoader::class)->defer(
+            static function (?ContainerInterface $scope) use ($container): void {
+                $runtime = $scope ?? $container;
+                $snapshot = $scope === null ? self::snapshot($runtime) : $scope->get(ContentTypeBootstrapSnapshot::class);
+                RecordRegistration::register($runtime, $snapshot->modules(), $snapshot->fields());
+            },
+        );
         $container->get(DataGridRegistry::class)->register(ModuleManifest::CODE, ContentTypesDataGrid::class);
         $container->get(ModulePageRegistry::class)->registerIndex(ModuleManifest::CODE, ContentTypesModulePageProvider::class);
+    }
+
+    /**
+     * Creates one lazy catalog shared by models and Admin contributions within a runtime scope
+     */
+    private static function snapshot(ContainerInterface $container): ContentTypeBootstrapSnapshot
+    {
+        $snapshot = new ContentTypeBootstrapSnapshot();
+        $snapshot->defer(static function () use ($container): array {
+            if (!$container->has(DatabaseDriverInterface::class)) {
+                return ['modules' => [], 'fields' => []];
+            }
+            if ($container->has(DatabaseRuntimeConfig::class)
+                && $container->get(DatabaseRuntimeConfig::class)->connections === []) {
+                return ['modules' => [], 'fields' => []];
+            }
+            $database = $container->get(Database::class);
+            $fieldTypes = $container->get(FieldTypeRegistry::class);
+            $modules = (new RecordModel($database, $fieldTypes))->modules();
+
+            return [
+                'modules' => $modules,
+                'fields' => (new DefinitionModel($database))->fieldsForTypes(array_map(
+                    static fn($module): int => $module->id(),
+                    $modules,
+                )),
+            ];
+        });
+
+        return $snapshot;
     }
 }

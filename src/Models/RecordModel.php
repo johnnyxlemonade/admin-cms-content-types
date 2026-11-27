@@ -17,7 +17,7 @@ use Lemonade\Framework\Database\QueryBuilder;
 /**
  * Queries and persists dynamic records and their typed values
  */
-final readonly class RecordModel
+final class RecordModel
 {
     public const array FILTERS = [
         'integer' => ['number', '/^-?(?:0|[1-9][0-9]{0,15})$/D'],
@@ -27,9 +27,22 @@ final readonly class RecordModel
     ];
 
     /**
-     * Receives the database and field type registry used by record queries
+     * @var list<RecordModule>|null
      */
-    public function __construct(private Database $database, private FieldTypeRegistry $types) {}
+    private ?array $moduleCatalog = null;
+
+    /**
+     * Receives the database, field types and optional bootstrap module catalog
+     *
+     * @param list<RecordModule>|null $moduleCatalog
+     */
+    public function __construct(
+        private readonly Database $database,
+        private readonly FieldTypeRegistry $types,
+        ?array $moduleCatalog = null,
+    ) {
+        $this->moduleCatalog = $moduleCatalog;
+    }
 
     /**
      * Returns enabled and disabled types so existing content stays manageable
@@ -38,14 +51,12 @@ final readonly class RecordModel
      */
     public function modules(): array
     {
-        if (!$this->database->tableExists('cms_content_record')) {
-            return [];
+        if ($this->moduleCatalog !== null) {
+            return $this->moduleCatalog;
         }
         $routePrefixes = [];
-        if ($this->database->tableExists('cms_content_type_route_prefix')) {
-            foreach ($this->database->table('cms_content_type_route_prefix')->getArray() as $row) {
-                $routePrefixes[(int) $row['type_id']][(string) $row['locale']] = (string) $row['path_prefix'];
-            }
+        foreach ($this->database->table('cms_content_type_route_prefix')->getArray() as $row) {
+            $routePrefixes[(int) $row['type_id']][(string) $row['locale']] = (string) $row['path_prefix'];
         }
 
         $types = $this->database->table('cms_content_type')->orderBy('id', 'ASC')->getArray();
@@ -57,7 +68,7 @@ final readonly class RecordModel
             (int) $right['id'],
         ]);
 
-        return array_map(static fn(array $row, int $position): RecordModule => new RecordModule(
+        return $this->moduleCatalog = array_map(static fn(array $row, int $position): RecordModule => new RecordModule(
             id: (int) $row['id'],
             name: (string) $row['name'],
             typeCode: (string) $row['code'],
@@ -118,35 +129,65 @@ final readonly class RecordModel
      */
     public function fieldValues(int $typeId, array $ids, string $locale, array $fields): array
     {
-        if ($ids === []) {
+        return $this->fieldValuesForTypes(
+            [$typeId => $ids],
+            $locale,
+            [$typeId => $fields],
+        );
+    }
+
+    /**
+     * Loads scalar values for records of several Content Types in two queries
+     *
+     * @param array<int,list<int>> $recordIdsByType
+     * @param array<int,list<array<string,mixed>>> $fieldsByType
+     * @return array<int,list<\Lemonade\Cms\ContentTypes\Record\RecordFieldValue>>
+     */
+    public function fieldValuesForTypes(
+        array $recordIdsByType,
+        string $locale,
+        array $fieldsByType,
+    ): array {
+        $recordIds = array_values(array_unique(array_merge(...array_values($recordIdsByType))));
+        if ($recordIds === []) {
             return [];
         }
+
         $stored = [];
-        $rows = $this->database->table('cms_content_record_value')->where('type_id', $typeId)->whereIn('record_id', $ids)->getArray();
+        $rows = $this->database->table('cms_content_record_value')
+            ->whereIn('record_id', $recordIds)
+            ->getArray();
         $localized = $this->database->table('cms_content_record_translation_value v')
-            ->selectRaw('v.*')->joinOn('cms_content_record_translation t', 't.id', '=', 'v.translation_id')
-            ->where('v.type_id', $typeId)->whereIn('v.record_id', $ids)->where('t.locale', $locale)->getArray();
+            ->selectRaw('v.*')
+            ->joinOn('cms_content_record_translation t', 't.id', '=', 'v.translation_id')
+            ->whereIn('v.record_id', $recordIds)
+            ->where('t.locale', $locale)
+            ->getArray();
         foreach ([0 => $rows, 1 => $localized] as $scope => $values) {
             foreach ($values as $row) {
                 $stored[$scope][(int) $row['record_id']][(int) $row['field_id']] = $row;
             }
         }
+
         $result = [];
-        foreach ($ids as $id) {
-            $result[$id] = [];
-            foreach ($fields as $field) {
-                if ($field['archived_at'] !== null || $field['kind'] === 'relation' || FieldTypeRegistry::isRepeater((string) $field['kind'])) {
-                    continue;
+        foreach ($recordIdsByType as $typeId => $typeRecordIds) {
+            foreach ($typeRecordIds as $recordId) {
+                $result[$recordId] = [];
+                foreach ($fieldsByType[$typeId] ?? [] as $field) {
+                    if ($field['archived_at'] !== null || $field['kind'] === 'relation' || FieldTypeRegistry::isRepeater((string) $field['kind'])) {
+                        continue;
+                    }
+                    $storage = $this->types->get((string) $field['kind'])->storage();
+                    $row = $stored[(int) $field['localized']][$recordId][(int) $field['id']] ?? [];
+                    $value = $storage === null ? null : ($row['value_' . $storage] ?? null);
+                    $result[$recordId][] = \Lemonade\Cms\ContentTypes\Record\RecordFieldValue::fromStored(
+                        $field,
+                        $value === null ? null : (string) $value,
+                    );
                 }
-                $storage = $this->types->get((string) $field['kind'])->storage();
-                $row = $stored[(int) $field['localized']][$id][(int) $field['id']] ?? [];
-                $value = $storage === null ? null : ($row['value_' . $storage] ?? null);
-                $result[$id][] = \Lemonade\Cms\ContentTypes\Record\RecordFieldValue::fromStored(
-                    $field,
-                    $value === null ? null : (string) $value,
-                );
             }
         }
+
         return $result;
     }
 

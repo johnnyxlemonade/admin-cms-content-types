@@ -32,8 +32,9 @@ final class RecordModelModulesTest extends TestCase
 
         $modules = $model->modules();
 
-        self::assertCount(1, $queries);
-        self::assertStringContainsString('ORDER BY id ASC', $queries[0]);
+        self::assertCount(2, $queries);
+        self::assertStringContainsString('cms_content_type_route_prefix', $queries[0]);
+        self::assertStringContainsString('ORDER BY id ASC', $queries[1]);
         self::assertSame([2, 10, 11], array_map(static fn($module): int => $module->id(), $modules));
         self::assertSame([60, 61, 62], array_map(static fn($module): int => $module->adminMetadata()->navigationOrder(), $modules));
         self::assertTrue($modules[0]->adminMetadata()->navigationVisible());
@@ -65,15 +66,17 @@ final class RecordModelModulesTest extends TestCase
      */
     private function model(array $rows, array &$queries): RecordModel
     {
-        $result = self::createStub(DatabaseResultInterface::class);
-        $result->method('result_array')->willReturn($rows);
-        $driver = self::createStub(DatabaseDriverInterface::class);
-        $driver->method('tableExists')->willReturnCallback(static fn(string $table): bool => $table === 'cms_content_record');
+        $prefixResult = self::createStub(DatabaseResultInterface::class);
+        $prefixResult->method('result_array')->willReturn([]);
+        $typeResult = self::createStub(DatabaseResultInterface::class);
+        $typeResult->method('result_array')->willReturn($rows);
+        $driver = self::createMock(DatabaseDriverInterface::class);
+        $driver->expects(self::never())->method('tableExists');
         $driver->method('protect_identifiers')->willReturnArgument(0);
-        $driver->method('query')->willReturnCallback(static function (string $sql) use (&$queries, $result): DatabaseResultInterface {
+        $driver->method('query')->willReturnCallback(static function (string $sql) use (&$queries, $prefixResult, $typeResult): DatabaseResultInterface {
             $queries[] = $sql;
 
-            return $result;
+            return str_contains($sql, 'cms_content_type_route_prefix') ? $prefixResult : $typeResult;
         });
         $database = new Database(self::createStub(ConnectionInterface::class), $driver);
 

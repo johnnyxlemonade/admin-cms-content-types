@@ -66,6 +66,7 @@ use Lemonade\Cms\ContentTypes\Models\DefinitionModel;
 use Lemonade\Cms\ContentTypes\Models\RecordGridProjection;
 use Lemonade\Cms\ContentTypes\Models\RecordModel;
 use Lemonade\Cms\ContentTypes\Public\PublishedRecordReadModel;
+use Lemonade\Cms\ContentTypes\Public\PublishedRecordReference;
 use Lemonade\Cms\ContentTypes\Record\RecordData;
 use Lemonade\Cms\ContentTypes\Record\RecordDataGrid;
 use Lemonade\Cms\ContentTypes\Record\RecordEditorDefinition;
@@ -653,6 +654,15 @@ final class RecordLifecycleTest extends TestCase
         ]);
         self::assertNotNull($this->row($database->table('cms_content_repeater_field')->where('id', $contentFieldId)->first())['archived_at']);
         self::assertSame(2, $database->table('cms_content_repeater_item_translation_value')->where('child_field_id', $contentFieldId)->countAllResults());
+        $public = new PublishedRecordReadModel(
+            $database,
+            $recordModel,
+            $definitions,
+            $types,
+            new FileReadModel($driver),
+            new PublicCmsUrlBuilder(),
+            $enabledModules,
+        );
         $publicRecord = $public->record('integration', $id, $publicCs);
         self::assertNotNull($publicRecord);
         self::assertInstanceOf(PublishedMediaInterface::class, $publicRecord);
@@ -687,7 +697,16 @@ final class RecordLifecycleTest extends TestCase
         self::assertSame([], $publicRecord->getFieldFiles('media_gallery'));
         $replacementThumbnailId = $files->createIdentity($module->code(), $id, 'thumbnail', 'image');
         $files->updateImageSource($replacementThumbnailId, 'replacement-asset', 'replacement-version', new ImageOriginalMetadata('replacement.png', ImageFormat::Png, 12, 2, 2));
-        self::assertSame($replacementThumbnailId, $public->record('integration', $id, $publicCs)?->getThumbnail()?->id());
+        $updatedPublic = new PublishedRecordReadModel(
+            $database,
+            $recordModel,
+            $definitions,
+            $types,
+            new FileReadModel($driver),
+            new PublicCmsUrlBuilder(),
+            $enabledModules,
+        );
+        self::assertSame($replacementThumbnailId, $updatedPublic->record('integration', $id, $publicCs)?->getThumbnail()?->id());
         $files->remove($replacementThumbnailId);
         try {
             $publicRecord->getFieldFiles('missing');
@@ -746,7 +765,45 @@ final class RecordLifecycleTest extends TestCase
         self::assertArrayNotHasKey('content', $adminTranslation);
         self::assertNull($public->record('other', $targetId, $publicCs));
         self::assertSame([$target2], array_map(static fn($record): int => $record->getId(), $public->related('integration', $id, 'related', $publicCs)));
+        self::assertSame([$target2], $public->relatedIdsForRecords('integration', [$id], 'related', $publicCs)[$id]);
+        self::assertSame([$id], $public->selectIds(
+            'integration',
+            $publicCs,
+            filters: ['select' => 'first'],
+            relations: ['related' => $target2],
+            sortBy: 'integer',
+            sortDirection: 'asc',
+            limit: 1,
+        ));
+        $recordSets = $public->recordsForTypes([
+            'integration' => [$id],
+            'other' => [$targetId, $target2],
+        ], $publicCs);
+        self::assertSame([$id], array_map(static fn($record): int => $record->getId(), $recordSets['integration']));
+        self::assertSame([$target2], array_map(static fn($record): int => $record->getId(), $recordSets['other']));
+        self::assertSame(
+            [$target2],
+            $public->relatedFieldIdsForRecordSets([
+                'integration' => [
+                    'recordIds' => [$id],
+                    'fieldCodes' => ['related'],
+                ],
+            ], $publicCs)['integration']['related'][$id],
+        );
+        self::assertSame(
+            ['integration' => [$id]],
+            $public->referencingIdsForTypes(['integration' => 'related'], $target2, $publicCs),
+        );
         self::assertSame([], $public->relatedForRecords('integration', [$targetId], 'related', $publicCs)[$targetId]);
+        $references = $public->references('integration', $publicCs, 'text', 'integer', 'select');
+        $reference = array_values(array_filter(
+            $references,
+            static fn(PublishedRecordReference $item): bool => $item->getId() === $id,
+        ))[0];
+        self::assertSame('Integration record', $reference->getTitle());
+        self::assertSame('Text', $reference->getLabel());
+        self::assertSame($publicRecord->getPublicUrl(), $reference->getPublicUrl());
+        self::assertSame('first', $reference->getGroup());
         try {
             $public->record('unknown_type', $id, $publicCs);
             self::fail('Unknown Content Type accepted.');
@@ -816,6 +873,15 @@ final class RecordLifecycleTest extends TestCase
         self::assertTrue($public->isPublicInAnyLocale('other', $targetId));
         $database->table('cms_content_record_translation')->where('record_id', $targetId)->where('locale', 'cs')
             ->set(['published_at' => '2099-01-01 00:00:00'])->update();
+        $public = new PublishedRecordReadModel(
+            $database,
+            $recordModel,
+            $definitions,
+            $types,
+            new FileReadModel($driver),
+            new PublicCmsUrlBuilder(),
+            $enabledModules,
+        );
         self::assertSame([$target2], array_map(static fn($record): int => $record->getId(), $public->related('integration', $id, 'related', $publicCs)));
         $database->table('cms_content_record_translation')->where('record_id', $targetId)->where('locale', 'cs')
             ->set(['published_at' => '2026-01-01 00:00:00'])->update();
@@ -831,6 +897,15 @@ final class RecordLifecycleTest extends TestCase
         self::assertNull($public->record('other', $target2, $publicEn));
         $database->table('system_language')->where('code', 'en')->set(['enabled' => 1])->update();
         $database->table('cms_route')->where('module_code', $other->code())->where('entity_id', $target2)->delete();
+        $public = new PublishedRecordReadModel(
+            $database,
+            $recordModel,
+            $definitions,
+            $types,
+            new FileReadModel($driver),
+            new PublicCmsUrlBuilder(),
+            $enabledModules,
+        );
         self::assertNull($public->record('other', $target2, $publicCs)?->getPublicUrl());
         $scalarValues = $recordModel->fieldValues($typeId, [$id], 'cs', $definitions->fields($typeId));
         self::assertNotContains('relation', array_map(static fn($value): string => $value->getKind(), $scalarValues[$id]));
@@ -1143,7 +1218,7 @@ final class RecordLifecycleTest extends TestCase
             RecordData::fromEditor($publishedExtra),
         );
         $recordModel->saveRelation($extraTarget, $secondType, $selfField, $secondType, [$target2]);
-        $publicBatch = new PublishedRecordReadModel(
+        $singlePublic = new PublishedRecordReadModel(
             $database,
             $recordModel,
             $definitions,
@@ -1152,18 +1227,26 @@ final class RecordLifecycleTest extends TestCase
             new PublicCmsUrlBuilder(),
             $enabledModules,
         );
-        $publicBatch->relatedForRecords('other', [$target2], 'related', $publicCs);
-        $singleQueryCount = $instrumentation->collect(static function (DatabaseMeasurements $measurements) use ($publicBatch, $target2, $publicCs): int {
-            $publicBatch->relatedForRecords('other', [$target2], 'related', $publicCs);
+        $batchPublic = new PublishedRecordReadModel(
+            $database,
+            $recordModel,
+            $definitions,
+            $types,
+            new FileReadModel($driver),
+            new PublicCmsUrlBuilder(),
+            $enabledModules,
+        );
+        $singleQueryCount = $instrumentation->collect(static function (DatabaseMeasurements $measurements) use ($singlePublic, $target2, $publicCs): int {
+            $singlePublic->relatedForRecords('other', [$target2], 'related', $publicCs);
             return $measurements->queryCount();
         });
-        $batchQueryCount = $instrumentation->collect(static function (DatabaseMeasurements $measurements) use ($publicBatch, $target2, $extraTarget, $publicCs): int {
-            $related = $publicBatch->relatedForRecords('other', [$target2, $extraTarget], 'related', $publicCs);
+        $batchQueryCount = $instrumentation->collect(static function (DatabaseMeasurements $measurements) use ($batchPublic, $target2, $extraTarget, $publicCs): int {
+            $related = $batchPublic->relatedForRecords('other', [$target2, $extraTarget], 'related', $publicCs);
             self::assertSame([$extraTarget], array_map(static fn($record): int => $record->getId(), $related[$target2]));
             self::assertSame([$target2], array_map(static fn($record): int => $record->getId(), $related[$extraTarget]));
             return $measurements->queryCount();
         });
-        self::assertSame($singleQueryCount, $batchQueryCount);
+        self::assertLessThanOrEqual($singleQueryCount, $batchQueryCount);
         self::assertSame([$extraTarget], array_map(
             static fn(array $row): int => (int) $row['id'],
             $recordModel->relationRowsForSources([$target2], [$selfField], 'cs'),

@@ -9,9 +9,22 @@ use Lemonade\Framework\Database\Database;
 /**
  * Reads and persists Content Type and field definitions
  */
-final readonly class DefinitionModel
+final class DefinitionModel
 {
-    public function __construct(private Database $database) {}
+    /**
+     * @var array<int,list<array<string,mixed>>>
+     */
+    private array $fieldCatalog = [];
+
+    /**
+     * @param array<int,list<array<string,mixed>>> $fieldCatalog
+     */
+    public function __construct(
+        private readonly Database $database,
+        array $fieldCatalog = [],
+    ) {
+        $this->fieldCatalog = $fieldCatalog;
+    }
 
     /**
      * Returns target type labels for relation field configuration
@@ -52,8 +65,78 @@ final readonly class DefinitionModel
      */
     public function fields(int $id, bool $lock = false): array
     {
-        $query = $this->database->table('cms_content_field')->where('type_id', $id)->orderBy('sort_order', 'ASC')->orderBy('id', 'ASC');
-        $fields = ($lock ? $query->lockForUpdate() : $query)->getArray();
+        if (!$lock && array_key_exists($id, $this->fieldCatalog)) {
+            return $this->fieldCatalog[$id];
+        }
+        $query = $this->database->table('cms_content_field')
+            ->where('type_id', $id)
+            ->orderBy('sort_order', 'ASC')
+            ->orderBy('id', 'ASC');
+
+        $fields = $this->withFieldDetails(
+            ($lock ? $query->lockForUpdate() : $query)->getArray(),
+            $lock,
+        );
+        if (!$lock) {
+            $this->fieldCatalog[$id] = $fields;
+        }
+
+        return $fields;
+    }
+
+    /**
+     * Returns field definitions grouped by Content Type
+     *
+     * @param list<int> $typeIds
+     * @return array<int,list<array<string,mixed>>>
+     */
+    public function fieldsForTypes(array $typeIds, bool $lock = false): array
+    {
+        $typeIds = array_values(array_unique($typeIds));
+        $result = array_fill_keys($typeIds, []);
+        if ($typeIds === []) {
+            return $result;
+        }
+        $missingTypeIds = $lock ? $typeIds : array_values(array_filter(
+            $typeIds,
+            fn(int $typeId): bool => !array_key_exists($typeId, $this->fieldCatalog),
+        ));
+        if ($missingTypeIds === []) {
+            return array_intersect_key($this->fieldCatalog, $result);
+        }
+
+        $query = $this->database->table('cms_content_field')
+            ->whereIn('type_id', $missingTypeIds)
+            ->orderBy('type_id', 'ASC')
+            ->orderBy('sort_order', 'ASC')
+            ->orderBy('id', 'ASC');
+        $fields = $this->withFieldDetails(
+            ($lock ? $query->lockForUpdate() : $query)->getArray(),
+            $lock,
+        );
+        foreach ($fields as $field) {
+            $result[(int) $field['type_id']][] = $field;
+        }
+        if (!$lock) {
+            foreach ($missingTypeIds as $typeId) {
+                $this->fieldCatalog[$typeId] = $result[$typeId];
+            }
+            foreach ($typeIds as $typeId) {
+                $result[$typeId] = $this->fieldCatalog[$typeId];
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Adds options and repeater children to loaded field definitions
+     *
+     * @param list<array<string,mixed>> $fields
+     * @return list<array<string,mixed>>
+     */
+    private function withFieldDetails(array $fields, bool $lock): array
+    {
         $options = [];
         $children = [];
         if ($fields !== []) {
@@ -64,13 +147,11 @@ final readonly class DefinitionModel
             foreach (($lock ? $optionQuery->lockForUpdate() : $optionQuery)->getArray() as $option) {
                 $options[(int) $option['field_id']][] = $option;
             }
-            if ($this->database->tableExists('cms_content_repeater_field')) {
-                $childQuery = $this->database->table('cms_content_repeater_field')
-                    ->whereIn('field_id', $fieldIds)
-                    ->orderBy('sort_order', 'ASC')->orderBy('id', 'ASC');
-                foreach (($lock ? $childQuery->lockForUpdate() : $childQuery)->getArray() as $child) {
-                    $children[(int) $child['field_id']][] = $child;
-                }
+            $childQuery = $this->database->table('cms_content_repeater_field')
+                ->whereIn('field_id', $fieldIds)
+                ->orderBy('sort_order', 'ASC')->orderBy('id', 'ASC');
+            foreach (($lock ? $childQuery->lockForUpdate() : $childQuery)->getArray() as $child) {
+                $children[(int) $child['field_id']][] = $child;
             }
         }
         foreach ($fields as &$field) {
@@ -206,10 +287,12 @@ final readonly class DefinitionModel
         $values['updated_at'] = date('Y-m-d H:i:s');
         if ($id !== null) {
             $this->database->table('cms_content_field')->where('id', $id)->where('type_id', $typeId)->set($values)->update();
+            $this->clearFieldCatalog();
 
             return $id;
         }
         $this->database->table('cms_content_field')->insert($values + ['type_id' => $typeId, 'created_at' => $values['updated_at']]);
+        $this->clearFieldCatalog();
 
         return (int) $this->database->lastInsertId();
     }
@@ -232,6 +315,7 @@ final readonly class DefinitionModel
                 $this->database->table('cms_content_field_option')->insert($values + ['field_id' => $fieldId, 'created_at' => $now]);
             }
         }
+        $this->clearFieldCatalog();
     }
 
     /**
@@ -272,6 +356,15 @@ final readonly class DefinitionModel
                 $values + ['field_id' => $fieldId, 'created_at' => $now],
             );
         }
+        $this->clearFieldCatalog();
+    }
+
+    /**
+     * Invalidates definitions changed within the current request
+     */
+    private function clearFieldCatalog(): void
+    {
+        $this->fieldCatalog = [];
     }
 
     /**

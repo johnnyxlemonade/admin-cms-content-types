@@ -14,27 +14,27 @@ use Lemonade\Admin\Module\AdminModuleRegistry;
 use Lemonade\Admin\Page\ModulePageRegistry;
 use Lemonade\Admin\Presentation\AdminFileUsageRegistry;
 use Lemonade\Cms\ContentTypes\Field\FieldTypeRegistry;
-use Lemonade\Cms\ContentTypes\Models\DefinitionModel;
-use Lemonade\Cms\ContentTypes\Models\RecordModel;
 use Lemonade\Framework\Container\ContainerInterface;
-use Lemonade\Framework\Database\Config\DatabaseRuntimeConfig;
-use Lemonade\Framework\Database\DatabaseDriverInterface;
 
 final readonly class RecordRegistration
 {
-    public static function boot(ContainerInterface $container): void
+    /**
+     * Registers one already loaded dynamic Content Type catalog with Admin infrastructure
+     *
+     * @param list<RecordModule> $modules
+     * @param array<int,list<array<string,mixed>>> $fields
+     */
+    public static function register(ContainerInterface $container, array $modules, array $fields): void
     {
-        if (!$container->has(DatabaseDriverInterface::class)) {
-            return;
-        }
-        if ($container->has(DatabaseRuntimeConfig::class)
-            && $container->get(DatabaseRuntimeConfig::class)->connections === []) {
-            return;
-        }
-        foreach ($container->get(RecordModel::class)->modules() as $module) {
+        $fieldTypes = $container->get(FieldTypeRegistry::class);
+        foreach ($modules as $module) {
             $code = $module->code();
-            foreach ($container->get(DefinitionModel::class)->fields($module->id()) as $field) {
-                $usage = $container->get(FieldTypeRegistry::class)->mediaDefinition($code, $field);
+            $container->get(AdminFileUsageRegistry::class)->registerCapabilities(
+                $code,
+                $module->fileCapabilities(),
+            );
+            foreach ($fields[$module->id()] ?? [] as $field) {
+                $usage = $fieldTypes->mediaDefinition($code, $field);
                 if ($usage !== null) {
                     $container->get(AdminFileUsageRegistry::class)->register($usage);
                 }
